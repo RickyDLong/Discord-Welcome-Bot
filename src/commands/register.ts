@@ -61,6 +61,14 @@ const commands = [
     .addSubcommand(sub =>
       sub.setName('update_dashboard')
         .setDescription('Force refresh the stats dashboard'),
+    )
+    .addSubcommand(sub =>
+      sub.setName('post_rules')
+        .setDescription('Post (or refresh) the rules embed in a channel')
+        .addChannelOption(opt =>
+          opt.setName('channel')
+            .setDescription('Channel to post rules in (defaults to current channel)'),
+        ),
     ),
 ].map(cmd => cmd.toJSON());
 

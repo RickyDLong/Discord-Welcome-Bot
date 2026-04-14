@@ -2,6 +2,7 @@ import { ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
 import { supabase } from '../db/supabase';
 import { awardPoints } from '../points/engine';
 import { updateDashboard } from '../dashboard/embed';
+import { postRulesEmbed } from '../setup/rulesEmbed';
 
 export async function handleAdminCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   const sub = interaction.options.getSubcommand();
@@ -73,5 +74,16 @@ export async function handleAdminCommand(interaction: ChatInputCommandInteractio
     await interaction.deferReply({ ephemeral: true });
     await updateDashboard(interaction.client);
     await interaction.editReply('✅ Dashboard refreshed.');
+  }
+
+  if (sub === 'post_rules') {
+    await interaction.deferReply({ ephemeral: true });
+    const channelId = interaction.options.getChannel('channel')?.id ?? interaction.channelId;
+    if (!channelId) {
+      await interaction.editReply('❌ Could not determine target channel.');
+      return;
+    }
+    await postRulesEmbed(interaction.client, channelId);
+    await interaction.editReply(`✅ Rules posted to <#${channelId}>.`);
   }
 }
