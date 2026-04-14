@@ -1,0 +1,68 @@
+import { VoiceState } from 'discord.js';
+import { supabase } from '../db/supabase';
+import { awardPoints } from '../points/engine';
+import { checkAndUpdateStreak } from '../points/streaks';
+
+const voiceSessions = new Map<string, { channelId: string; joinedAt: Date }>();
+
+function key(guildId: string, userId: string) {
+  return `${guildId}:${userId}`;
+}
+
+async function closeSession(guildId: string, userId: string, channelId: string, joinedAt: Date) {
+  const duration = Math.floor((Date.now() - joinedAt.getTime()) / 1000);
+  await supabase.from('voice_sessions').insert({
+    guild_id: guildId, user_id: userId, channel_id: channelId,
+    joined_at: joinedAt.toISOString(),
+    left_at: new Date().toISOString(),
+    duration_seconds: duration,
+  });
+  if (duration >= 60) {
+    const pts = Math.floor(duration / 300) * 2;
+    if (pts > 0) {
+      await awardPoints(guildId, userId, pts, 'voice_time');
+      await checkAndUpdateStreak(guildId, userId);
+    }
+  }
+  return duration;
+}
+
+export async function handleVoiceStateUpdate(oldState: VoiceState, newState: VoiceState) {
+  const guildId = newState.guild.id;
+  const userId = newState.id;
+  const k = key(guildId, userId);
+
+  try {
+    if (oldState.channelId && !newState.channelId) {
+      const session = voiceSessions.get(k);
+      if (session) {
+        await closeSession(guildId, userId, session.channelId, session.joinedAt);
+        voiceSessions.delete(k);
+      }
+    } else if (!oldState.channelId && newState.channelId) {
+      voiceSessions.set(k, { channelId: newState.channelId, joinedAt: new Date() });
+    } else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
+      const session = voiceSessions.get(k);
+      if (session) {
+        await closeSession(guildId, userId, session.channelId, session.joinedAt);
+      }
+      voiceSessions.set(k, { channelId: newState.channelId, joinedAt: new Date() });
+    }
+
+    const events: string[] = [];
+    if (oldState.selfMute !== newState.selfMute) events.push(newState.selfMute ? 'mute' : 'unmute');
+    if (oldState.selfDeaf !== newState.selfDeaf) events.push(newState.selfDeaf ? 'deafen' : 'undeafen');
+    if (oldState.streaming !== newState.streaming) events.push(newState.streaming ? 'stream_start' : 'stream_end');
+    if (oldState.selfVideo !== newState.selfVideo) events.push(newState.selfVideo ? 'video_start' : 'video_end');
+
+    for (const ev of events) {
+      await supabase.from('voice_events').insert({
+        guild_id: guildId, user_id: userId,
+        channel_id: newState.channelId ?? oldState.channelId,
+        event_type: ev,
+      });
+    }
+  } catch (e) {
+    console.error('[VoiceStateUpdate] Error:', e);
+  }
+}

@@ -1,0 +1,107 @@
+import { Router } from 'express';
+import { supabase } from '../../db/supabase';
+import { config } from '../../config';
+
+export const statsRouter = Router();
+const G = config.GUILD_ID;
+
+// GET /api/stats/overview
+statsRouter.get('/overview', async (_req, res) => {
+  const today = new Date().toISOString().split('T')[0]!;
+  const [members, voiceSessions, messages, recentJoins] = await Promise.all([
+    supabase.from('user_points').select('user_id', { count: 'exact', head: true }).eq('guild_id', G),
+    supabase.from('voice_sessions').select('duration_seconds').eq('guild_id', G).gte('started_at', today).not('duration_seconds', 'is', null),
+    supabase.from('message_events').select('id', { count: 'exact', head: true }).eq('guild_id', G).gte('created_at', today),
+    supabase.from('member_events').select('event_type, created_at').eq('guild_id', G).in('event_type', ['join','leave']).gte('created_at', today),
+  ]);
+  const totalVoiceSecs = (voiceSessions.data ?? []).reduce((a, r) => a + (r.duration_seconds ?? 0), 0);
+  const joins  = (recentJoins.data ?? []).filter(r => r.event_type === 'join').length;
+  const leaves = (recentJoins.data ?? []).filter(r => r.event_type === 'leave').length;
+  res.json({ members: members.count, voiceHoursToday: +(totalVoiceSecs / 3600).toFixed(1), messagesToday: messages.count, joinsToday: joins, leavesToday: leaves });
+});
+
+// GET /api/stats/leaderboard/points
+statsRouter.get('/leaderboard/points', async (req, res) => {
+  const limit = Math.min(parseInt(req.query['limit'] as string) || 10, 50);
+  const { data } = await supabase.from('user_points').select('user_id, points, total_earned').eq('guild_id', G).order('total_earned', { ascending: false }).limit(limit);
+  res.json(data ?? []);
+});
+
+// GET /api/stats/leaderboard/voice?period=today|week|all
+statsRouter.get('/leaderboard/voice', async (req, res) => {
+  const period = req.query['period'] as string ?? 'today';
+  let since = new Date(0).toISOString();
+  if (period === 'today') since = new Date().toISOString().split('T')[0]!;
+  if (period === 'week')  since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const { data } = await supabase.from('voice_sessions').select('user_id, duration_seconds').eq('guild_id', G).gte('started_at', since).not('duration_seconds', 'is', null);
+  const agg = new Map<string, number>();
+  (data ?? []).forEach(r => agg.set(r.user_id, (agg.get(r.user_id) ?? 0) + r.duration_seconds));
+  const sorted = [...agg.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([user_id, seconds]) => ({ user_id, seconds }));
+  res.json(sorted);
+});
+
+// GET /api/stats/leaderboard/messages?period=today|week|all
+statsRouter.get('/leaderboard/messages', async (req, res) => {
+  const period = req.query['period'] as string ?? 'today';
+  let since = new Date(0).toISOString();
+  if (period === 'today') since = new Date().toISOString().split('T')[0]!;
+  if (period === 'week')  since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const { data } = await supabase.from('message_events').select('user_id').eq('guild_id', G).gte('created_at', since);
+  const agg = new Map<string, number>();
+  (data ?? []).forEach(r => agg.set(r.user_id, (agg.get(r.user_id) ?? 0) + 1));
+  const sorted = [...agg.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([user_id, count]) => ({ user_id, count }));
+  res.json(sorted);
+});
+
+// GET /api/stats/leaderboard/streaks
+statsRouter.get('/leaderboard/streaks', async (_req, res) => {
+  const { data } = await supabase.from('daily_streaks').select('user_id, streak_count').eq('guild_id', G).order('streak_count', { ascending: false }).limit(10);
+  res.json(data ?? []);
+});
+
+// GET /api/stats/voice/live
+statsRouter.get('/voice/live', async (_req, res) => {
+  const { data } = await supabase.from('voice_channel_snapshots').select('*').eq('guild_id', G).order('snapshot_at', { ascending: false }).limit(20);
+  // Return most recent snapshot per channel
+  const latest = new Map<string, any>();
+  (data ?? []).forEach(r => { if (!latest.has(r.channel_id)) latest.set(r.channel_id, r); });
+  res.json([...latest.values()]);
+});
+
+// GET /api/stats/members/timeline?days=30
+statsRouter.get('/members/timeline', async (req, res) => {
+  const days  = parseInt(req.query['days'] as string) || 30;
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  const { data } = await supabase.from('member_events').select('event_type, created_at').eq('guild_id', G).in('event_type', ['join','leave']).gte('created_at', since).order('created_at');
+  res.json(data ?? []);
+});
+
+// GET /api/stats/user/:userId
+statsRouter.get('/user/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const today = new Date().toISOString().split('T')[0]!;
+  const [pts, streak, voice, msgs, quests] = await Promise.all([
+    supabase.from('user_points').select('points, total_earned').eq('user_id', userId).eq('guild_id', G).single(),
+    supabase.from('daily_streaks').select('streak_count, last_active_date').eq('user_id', userId).eq('guild_id', G).single(),
+    supabase.from('voice_sessions').select('duration_seconds').eq('user_id', userId).eq('guild_id', G).gte('started_at', today).not('duration_seconds', 'is', null),
+    supabase.from('message_events').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('guild_id', G).gte('created_at', today),
+    supabase.from('quest_submissions').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('guild_id', G).eq('status', 'approved'),
+  ]);
+  const voiceSecs = (voice.data ?? []).reduce((a, r) => a + (r.duration_seconds ?? 0), 0);
+  res.json({ points: pts.data?.points ?? 0, total_earned: pts.data?.total_earned ?? 0, streak: streak.data?.streak_count ?? 0, voice_seconds_today: voiceSecs, messages_today: msgs.count ?? 0, quests_completed: quests.count ?? 0 });
+});
+
+// GET /api/stats/activity/heatmap?userId=xxx
+statsRouter.get('/activity/heatmap', async (req, res) => {
+  const userId = req.query['userId'] as string;
+  const since  = new Date(Date.now() - 365 * 86_400_000).toISOString();
+  const query  = supabase.from('message_events').select('created_at').eq('guild_id', G).gte('created_at', since);
+  if (userId) query.eq('user_id', userId);
+  const { data } = await query;
+  const counts = new Map<string, number>();
+  (data ?? []).forEach(r => {
+    const day = r.created_at.split('T')[0]!;
+    counts.set(day, (counts.get(day) ?? 0) + 1);
+  });
+  res.json(Object.fromEntries(counts));
+});
