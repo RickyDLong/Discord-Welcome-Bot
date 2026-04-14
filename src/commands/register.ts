@@ -69,6 +69,14 @@ const commands = [
           opt.setName('channel')
             .setDescription('Channel to post rules in (defaults to current channel)'),
         ),
+    )
+    .addSubcommand(sub =>
+      sub.setName('post_announcement')
+        .setDescription('Post the Archix intro announcement')
+        .addChannelOption(opt =>
+          opt.setName('channel')
+            .setDescription('Channel to post in (defaults to current channel)'),
+        ),
     ),
 ].map(cmd => cmd.toJSON());
 

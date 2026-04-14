@@ -3,6 +3,7 @@ import { supabase } from '../db/supabase';
 import { awardPoints } from '../points/engine';
 import { updateDashboard } from '../dashboard/embed';
 import { postRulesEmbed } from '../setup/rulesEmbed';
+import { postAnnouncementEmbed } from '../setup/announcementEmbed';
 
 export async function handleAdminCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   const sub = interaction.options.getSubcommand();
@@ -85,5 +86,16 @@ export async function handleAdminCommand(interaction: ChatInputCommandInteractio
     }
     await postRulesEmbed(interaction.client, channelId);
     await interaction.editReply(`✅ Rules posted to <#${channelId}>.`);
+  }
+
+  if (sub === 'post_announcement') {
+    await interaction.deferReply({ ephemeral: true });
+    const channelId = interaction.options.getChannel('channel')?.id ?? interaction.channelId;
+    if (!channelId) {
+      await interaction.editReply('❌ Could not determine target channel.');
+      return;
+    }
+    await postAnnouncementEmbed(interaction.client, channelId);
+    await interaction.editReply(`✅ Announcement posted to <#${channelId}>.`);
   }
 }
