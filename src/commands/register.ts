@@ -35,6 +35,18 @@ const commands = [
     ),
 
   new SlashCommandBuilder()
+    .setName('daily')
+    .setDescription('View today\'s daily quests and your progress'),
+
+  new SlashCommandBuilder()
+    .setName('achievements')
+    .setDescription('View earned achievement badges')
+    .addUserOption(opt =>
+      opt.setName('user')
+        .setDescription('Member to check (defaults to you)'),
+    ),
+
+  new SlashCommandBuilder()
     .setName('admin')
     .setDescription('Admin commands')
     .setDefaultMemberPermissions(8) // Administrator only

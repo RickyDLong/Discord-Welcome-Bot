@@ -1,16 +1,20 @@
 import { ChatInputCommandInteraction } from 'discord.js';
-import { handlePointsCommand }      from '../commands/points';
-import { handleLeaderboardCommand } from '../commands/leaderboard';
-import { handleProfileCommand }     from '../commands/profile';
-import { handleQuestCommand }       from '../commands/quest';
-import { handleAdminCommand }       from '../commands/admin';
+import { handlePointsCommand }        from '../commands/points';
+import { handleLeaderboardCommand }   from '../commands/leaderboard';
+import { handleProfileCommand }       from '../commands/profile';
+import { handleQuestCommand }         from '../commands/quest';
+import { handleAdminCommand }         from '../commands/admin';
+import { handleDailyCommand }         from '../commands/daily';
+import { handleAchievementsCommand }  from '../commands/achievements';
 
 const commandMap: Record<string, (i: ChatInputCommandInteraction) => Promise<void>> = {
-  points:      handlePointsCommand,
-  leaderboard: handleLeaderboardCommand,
-  profile:     handleProfileCommand,
-  quest:       handleQuestCommand,
-  admin:       handleAdminCommand,
+  points:       handlePointsCommand,
+  leaderboard:  handleLeaderboardCommand,
+  profile:      handleProfileCommand,
+  quest:        handleQuestCommand,
+  admin:        handleAdminCommand,
+  daily:        handleDailyCommand,
+  achievements: handleAchievementsCommand,
 };
 
 export async function handleSlashCommand(interaction: ChatInputCommandInteraction): Promise<void> {

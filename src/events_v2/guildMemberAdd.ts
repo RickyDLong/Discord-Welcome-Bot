@@ -2,6 +2,7 @@ import { GuildMember, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle
 import { config } from '../config';
 import { supabase } from '../db/supabase';
 import { awardPoints } from '../points/engine';
+import { checkAndAwardAchievement } from '../achievements/engine';
 
 export async function handleGuildMemberAdd(member: GuildMember) {
   try {
@@ -12,6 +13,12 @@ export async function handleGuildMemberAdd(member: GuildMember) {
       event_type: 'join',
     });
     await awardPoints(member.guild.id, member.id, 10, 'join_bonus');
+
+    // OG achievement: first 50 members
+    if (member.guild.memberCount <= 50) {
+      await checkAndAwardAchievement(member.guild.id, member.id, 'og_member', member.client);
+    }
+
     const role = member.guild.roles.cache.get(config.ROLE_COMMUNITY_MEMBER);
     if (role) await member.roles.add(role).catch(console.error);
 
