@@ -20,7 +20,7 @@ interface PointsEntry  { user_id: string; points: number; total_earned: number }
 interface VoiceEntry   { user_id: string; seconds: number }
 interface MsgEntry     { user_id: string; count: number }
 interface StreakEntry   { user_id: string; streak_count: number }
-interface VoiceLive    { channel_id: string; channel_name: string; user_count: number; snapshot_at: string }
+interface VoiceLive    { channel_id: string; channel_name: string; member_count: number; snapshot_at: string }
 interface MemberEvent  { event_type: 'join' | 'leave'; created_at: string }
 interface ReactionEntry { user_id: string; count: number }
 interface ActivityScore {
@@ -449,7 +449,7 @@ function Leaderboards() {
 function LiveVoice() {
   const { data, loading } = useData<VoiceLive[]>(() => apiFetch('/api/stats/voice/live'))
 
-  const active = (data ?? []).filter(c => c.user_count > 0)
+  const active = (data ?? []).filter(c => c.member_count > 0)
 
   return (
     <div>
@@ -474,10 +474,10 @@ function LiveVoice() {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontFamily: 'var(--mono)', fontSize: 22, fontWeight: 700, color: 'var(--green)' }}>
-                  {ch.user_count}
+                  {ch.member_count}
                 </span>
                 <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                  {ch.user_count === 1 ? 'member' : 'members'}
+                  {ch.member_count === 1 ? 'member' : 'members'}
                 </span>
               </div>
             </Card>
