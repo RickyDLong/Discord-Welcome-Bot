@@ -108,6 +108,14 @@ export async function updateDashboard(client: Client): Promise<void> {
     const idleMembers   = memberData.filter(m => m.presence?.status === 'idle').size;
     const dndMembers    = memberData.filter(m => m.presence?.status === 'dnd').size;
 
+    // Persist member count so the REST API can serve it without Discord client access
+    void supabase.from('guild_stats').upsert({
+      guild_id:     config.GUILD_ID,
+      member_count: totalMembers,
+      online_count: onlineMembers,
+      updated_at:   new Date().toISOString(),
+    }, { onConflict: 'guild_id' });
+
     // Voice
     const voiceAgg = new Map<string, number>();
     (voiceTop.data ?? []).forEach(r =>

@@ -10,6 +10,7 @@ const REFRESH_MS = 30_000
 // ─── TYPES ──────────────────────────────────────────────────────────────────
 interface Overview {
   members: number | null
+  onlineCount: number | null
   voiceHoursToday: number
   messagesToday: number | null
   joinsToday: number
@@ -21,8 +22,23 @@ interface MsgEntry     { user_id: string; count: number }
 interface StreakEntry   { user_id: string; streak_count: number }
 interface VoiceLive    { channel_id: string; channel_name: string; user_count: number; snapshot_at: string }
 interface MemberEvent  { event_type: 'join' | 'leave'; created_at: string }
+interface ReactionEntry { user_id: string; count: number }
+interface ActivityScore {
+  score: number
+  breakdown: { messages: number; voice_minutes: number; reactions: number; quests_completed: number }
+}
+interface TierDist { Member: number; Active: number; Regular: number; Veteran: number; Elite: number; Legend: number }
+interface QuestDef { id: string; name: string; description: string; difficulty: string; xp_reward: number; quest_type: string; target_count: number }
+interface QuestPulse { quests: QuestDef[]; totalCompletions: number; uniqueCompleters: number; tripleThreat: string[] }
+interface AchievementEntry {
+  user_id: string
+  achievement_id: string
+  earned_at: string
+  achievement_definitions: { name: string; description: string; emoji: string; xp_reward: number } | null
+}
+interface AchievementXP { user_id: string; achievement_xp: number }
 type Period = 'today' | 'week' | 'all'
-type Section = 'overview' | 'leaderboards' | 'voice' | 'growth' | 'heatmap'
+type Section = 'overview' | 'leaderboards' | 'voice' | 'growth' | 'heatmap' | 'achievements'
 
 // ─── API HELPERS ─────────────────────────────────────────────────────────────
 async function apiFetch<T>(path: string): Promise<T> {
@@ -143,29 +159,155 @@ function StatCard({ label, value, sub, accent, icon }: {
   )
 }
 
+// ─── TIER BADGE ──────────────────────────────────────────────────────────────
+const TIER_CONFIG: { name: string; emoji: string; color: string }[] = [
+  { name: 'Legend',  emoji: '🔴', color: '#e74c3c' },
+  { name: 'Elite',   emoji: '🟡', color: '#f39c12' },
+  { name: 'Veteran', emoji: '🟣', color: '#9b59b6' },
+  { name: 'Regular', emoji: '🟢', color: '#2ecc71' },
+  { name: 'Active',  emoji: '🔵', color: '#3498db' },
+  { name: 'Member',  emoji: '⚪', color: '#95a5a6' },
+]
+
+function TierDistribution() {
+  const { data, loading } = useData<TierDist>(() => apiFetch('/api/stats/tiers/distribution'))
+  const total = data ? Object.values(data).reduce((a, b) => a + b, 0) : 0
+
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <span style={{ fontSize: 16 }}>📊</span>
+        <span style={{ fontWeight: 600, fontSize: 14 }}>Tier Distribution</span>
+        {!loading && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)' }}>{total} ranked</span>}
+      </div>
+      {loading ? (
+        Array.from({ length: 3 }).map((_, i) => <div key={i} style={{ marginBottom: 8 }}><Skeleton /></div>)
+      ) : total === 0 ? (
+        <p style={{ color: 'var(--text-3)', fontSize: 12 }}>No members ranked yet</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {TIER_CONFIG.filter(t => (data?.[t.name as keyof TierDist] ?? 0) > 0).map(t => {
+            const count = data?.[t.name as keyof TierDist] ?? 0
+            const pct = total > 0 ? (count / total) * 100 : 0
+            return (
+              <div key={t.name}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 }}>
+                  <span style={{ color: t.color, fontWeight: 600 }}>{t.emoji} {t.name}</span>
+                  <span style={{ color: 'var(--text-3)', fontFamily: 'var(--mono)' }}>{count}</span>
+                </div>
+                <div style={{ height: 4, borderRadius: 2, background: 'var(--elevated)' }}>
+                  <div style={{ height: '100%', borderRadius: 2, background: t.color, width: `${pct}%`, transition: 'width 0.5s ease' }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function QuestPulseCard() {
+  const { data, loading } = useData<QuestPulse>(() => apiFetch('/api/stats/quests/today'))
+
+  const diffColor = (d: string) => ({ easy: 'var(--green)', medium: '#f59e0b', hard: '#ef4444' })[d] ?? 'var(--text-3)'
+
+  return (
+    <Card>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <span style={{ fontSize: 16 }}>🎯</span>
+        <span style={{ fontWeight: 600, fontSize: 14 }}>Quest Pulse</span>
+        {!loading && data && (
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-3)' }}>
+            {data.totalCompletions} completions
+          </span>
+        )}
+      </div>
+      {loading ? (
+        Array.from({ length: 3 }).map((_, i) => <div key={i} style={{ marginBottom: 8 }}><Skeleton /></div>)
+      ) : !data || data.quests.length === 0 ? (
+        <p style={{ color: 'var(--text-3)', fontSize: 12 }}>No quests today yet</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {data.quests.map(q => (
+            <div key={q.id} style={{ padding: '8px 10px', background: 'var(--elevated)', borderRadius: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                <span style={{ fontSize: 12, fontWeight: 600 }}>{q.name}</span>
+                <span style={{ fontSize: 10, color: diffColor(q.difficulty), fontWeight: 700, textTransform: 'uppercase' }}>{q.difficulty}</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{q.description}</div>
+              <div style={{ fontSize: 10, color: '#f59e0b', marginTop: 3, fontFamily: 'var(--mono)' }}>+{q.xp_reward} XP</div>
+            </div>
+          ))}
+          {data.uniqueCompleters > 0 && (
+            <div style={{ fontSize: 11, color: 'var(--text-2)', paddingTop: 4, borderTop: '1px solid var(--border)' }}>
+              ✅ <strong>{data.uniqueCompleters}</strong> member{data.uniqueCompleters !== 1 ? 's' : ''} completed quests today
+              {data.tripleThreat.length > 0 && <span style={{ color: '#f59e0b' }}> · 🎰 Triple Threat active</span>}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  )
+}
+
 // ─── OVERVIEW SECTION ────────────────────────────────────────────────────────
 function Overview() {
   const { data, loading } = useData<Overview>(() => apiFetch('/api/stats/overview'))
+  const { data: scoreData, loading: scoreLoading } = useData<ActivityScore>(() => apiFetch('/api/stats/activity/score'))
 
   const cards = [
-    { label: 'Members',       value: data?.members       ?? '—', icon: '👥', accent: 'var(--primary)' },
-    { label: 'Voice Hours',   value: data?.voiceHoursToday != null ? `${data.voiceHoursToday}h` : '—', icon: '🎙️', accent: 'var(--blue)' },
-    { label: 'Messages Today',value: data?.messagesToday  ?? '—', icon: '💬', accent: '#8b5cf6' },
-    { label: 'Joins Today',   value: data?.joinsToday     ?? '—', icon: '✅', accent: 'var(--green)', sub: `${data?.leavesToday ?? 0} left` },
+    {
+      label: 'Members',
+      value: data?.members ?? '—',
+      icon: '👥',
+      accent: 'var(--primary)',
+      sub: data?.onlineCount != null ? `🟢 ${data.onlineCount} online` : undefined,
+    },
+    {
+      label: 'Voice Hours',
+      value: data?.voiceHoursToday != null ? `${data.voiceHoursToday}h` : '—',
+      icon: '🎙️',
+      accent: 'var(--blue)',
+    },
+    {
+      label: 'Messages Today',
+      value: data?.messagesToday ?? '—',
+      icon: '💬',
+      accent: '#8b5cf6',
+    },
+    {
+      label: 'Joins Today',
+      value: data?.joinsToday ?? '—',
+      icon: '✅',
+      accent: 'var(--green)',
+      sub: `${data?.leavesToday ?? 0} left`,
+    },
+    {
+      label: 'Activity Score',
+      value: scoreLoading ? '—' : (scoreData?.score ?? 0).toLocaleString(),
+      icon: '⚡',
+      accent: '#f59e0b',
+      sub: scoreData ? `${scoreData.breakdown.voice_minutes}min voice · ${scoreData.breakdown.quests_completed} quests` : undefined,
+    },
   ]
 
   return (
-    <div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <SectionHeader title="Server Overview" sub="Live stats updated every 30s" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(155px, 1fr))', gap: 12 }}>
         {loading
-          ? Array.from({ length: 4 }).map((_, i) => (
+          ? Array.from({ length: 5 }).map((_, i) => (
               <Card key={i}><Skeleton /></Card>
             ))
           : cards.map(c => (
               <StatCard key={c.label} {...c} />
             ))
         }
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+        <TierDistribution />
+        <QuestPulseCard />
       </div>
     </div>
   )
@@ -239,10 +381,12 @@ function PeriodToggle({ value, onChange }: { value: Period; onChange: (p: Period
 function Leaderboards() {
   const [period, setPeriod] = useState<Period>('today')
 
-  const pts    = useData<PointsEntry[]>(() => apiFetch('/api/stats/leaderboard/points'))
-  const voice  = useData<VoiceEntry[]>(() => apiFetch(`/api/stats/leaderboard/voice?period=${period}`), [period])
-  const msgs   = useData<MsgEntry[]>(() => apiFetch(`/api/stats/leaderboard/messages?period=${period}`), [period])
-  const streaks = useData<StreakEntry[]>(() => apiFetch('/api/stats/leaderboard/streaks'))
+  const pts      = useData<PointsEntry[]>(() => apiFetch('/api/stats/leaderboard/points'))
+  const voice    = useData<VoiceEntry[]>(() => apiFetch(`/api/stats/leaderboard/voice?period=${period}`), [period])
+  const msgs     = useData<MsgEntry[]>(() => apiFetch(`/api/stats/leaderboard/messages?period=${period}`), [period])
+  const streaks  = useData<StreakEntry[]>(() => apiFetch('/api/stats/leaderboard/streaks'))
+  const rxn      = useData<ReactionEntry[]>(() => apiFetch(`/api/stats/leaderboard/reactions?period=${period}`), [period])
+  const achXP    = useData<AchievementXP[]>(() => apiFetch('/api/stats/achievements/leaderboard'))
 
   return (
     <div>
@@ -255,7 +399,7 @@ function Leaderboards() {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
         <LBCard
-          title="Points" icon="🏆" loading={pts.loading} empty="No data yet"
+          title="All-Time XP" icon="🏆" loading={pts.loading} empty="No data yet"
           rows={(pts.data ?? []).slice(0,5).map(r => ({
             label: `User …${shortId(r.user_id)}`,
             value: r.total_earned.toLocaleString(),
@@ -276,10 +420,24 @@ function Leaderboards() {
           }))}
         />
         <LBCard
+          title="Reactions" icon="⚡" loading={rxn.loading} empty="No reactions yet"
+          rows={(rxn.data ?? []).slice(0,5).map(r => ({
+            label: `User …${shortId(r.user_id)}`,
+            value: r.count.toLocaleString(),
+          }))}
+        />
+        <LBCard
           title="Streaks" icon="🔥" loading={streaks.loading} empty="No streaks yet"
           rows={(streaks.data ?? []).slice(0,5).map(r => ({
             label: `User …${shortId(r.user_id)}`,
             value: `${r.streak_count}d`,
+          }))}
+        />
+        <LBCard
+          title="Achievement XP" icon="🏅" loading={achXP.loading} empty="No achievements yet"
+          rows={(achXP.data ?? []).slice(0,5).map(r => ({
+            label: `User …${shortId(r.user_id)}`,
+            value: r.achievement_xp.toLocaleString(),
           }))}
         />
       </div>
@@ -546,13 +704,87 @@ function ActivityHeatmap() {
   )
 }
 
+// ─── ACHIEVEMENTS ─────────────────────────────────────────────────────────────
+function Achievements() {
+  const recent = useData<AchievementEntry[]>(() => apiFetch('/api/stats/achievements/recent?limit=20'))
+  const top    = useData<AchievementXP[]>(() => apiFetch('/api/stats/achievements/leaderboard'))
+
+  function timeAgo(iso: string) {
+    const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+    if (mins < 60) return `${mins}m ago`
+    if (mins < 1440) return `${Math.floor(mins / 60)}h ago`
+    return `${Math.floor(mins / 1440)}d ago`
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <SectionHeader title="Achievements" sub="Badges earned by the community" />
+
+      {/* Recent unlocks */}
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+          Recently Unlocked
+        </div>
+        {recent.loading ? (
+          Array.from({ length: 5 }).map((_, i) => <Card key={i} style={{ marginBottom: 8 }}><Skeleton /></Card>)
+        ) : (recent.data ?? []).length === 0 ? (
+          <Card><p style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>No achievements earned yet</p></Card>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {(recent.data ?? []).map((a, i) => {
+              const def = a.achievement_definitions
+              return (
+                <Card key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px' }}>
+                  <span style={{ fontSize: 22, flexShrink: 0 }}>{def?.emoji ?? '🏅'}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{def?.name ?? a.achievement_id}</div>
+                    {def?.description && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 1 }}>{def.description}</div>}
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{timeAgo(a.earned_at)}</div>
+                    {def?.xp_reward && (
+                      <div style={{ fontSize: 11, color: '#f59e0b', fontFamily: 'var(--mono)', fontWeight: 700 }}>+{def.xp_reward} XP</div>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--mono)', minWidth: 60, textAlign: 'right' }}>
+                    …{shortId(a.user_id)}
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Achievement XP leaderboard */}
+      <div>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+          Top Earners by Achievement XP
+        </div>
+        <Card>
+          {top.loading ? (
+            Array.from({ length: 5 }).map((_, i) => <div key={i} style={{ marginBottom: 10 }}><Skeleton /></div>)
+          ) : (top.data ?? []).length === 0 ? (
+            <p style={{ color: 'var(--text-3)', fontSize: 12, padding: '12px 0' }}>No data yet</p>
+          ) : (
+            (top.data ?? []).map((r, i) => (
+              <LBRow key={i} rank={i} label={`User …${shortId(r.user_id)}`} value={`${r.achievement_xp.toLocaleString()} XP`} isFirst={i === 0} />
+            ))
+          )}
+        </Card>
+      </div>
+    </div>
+  )
+}
+
 // ─── NAV ─────────────────────────────────────────────────────────────────────
 const SECTIONS: { id: Section; label: string; icon: string }[] = [
-  { id: 'overview',     label: 'Overview',     icon: '📊' },
-  { id: 'leaderboards', label: 'Leaderboards', icon: '🏆' },
-  { id: 'voice',        label: 'Live Voice',   icon: '🔊' },
-  { id: 'growth',       label: 'Growth',       icon: '📈' },
-  { id: 'heatmap',      label: 'Heatmap',      icon: '🔥' },
+  { id: 'overview',      label: 'Overview',     icon: '📊' },
+  { id: 'leaderboards',  label: 'Leaderboards', icon: '🏆' },
+  { id: 'achievements',  label: 'Achievements', icon: '🏅' },
+  { id: 'voice',         label: 'Live Voice',   icon: '🔊' },
+  { id: 'growth',        label: 'Growth',       icon: '📈' },
+  { id: 'heatmap',       label: 'Heatmap',      icon: '🔥' },
 ]
 
 function NavItem({ section, active, onClick }: { section: typeof SECTIONS[0]; active: boolean; onClick: () => void }) {
@@ -636,6 +868,7 @@ export default function App() {
   const sectionEl = {
     overview:     <Overview key={`ov-${refreshKey}`} />,
     leaderboards: <Leaderboards key={`lb-${refreshKey}`} />,
+    achievements: <Achievements key={`ac-${refreshKey}`} />,
     voice:        <LiveVoice key={`lv-${refreshKey}`} />,
     growth:       <MemberGrowth key={`mg-${refreshKey}`} />,
     heatmap:      <ActivityHeatmap key={`hm-${refreshKey}`} />,

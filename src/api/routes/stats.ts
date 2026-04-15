@@ -8,8 +8,8 @@ const G = config.GUILD_ID;
 // GET /api/stats/overview
 statsRouter.get('/overview', async (_req, res) => {
   const today = new Date().toISOString().split('T')[0]!;
-  const [members, voiceSessions, messages, recentJoins] = await Promise.all([
-    supabase.from('user_points').select('user_id', { count: 'exact', head: true }).eq('guild_id', G),
+  const [guildStats, voiceSessions, messages, recentJoins] = await Promise.all([
+    supabase.from('guild_stats').select('member_count, online_count').eq('guild_id', G).single(),
     supabase.from('voice_sessions').select('duration_seconds').eq('guild_id', G).gte('started_at', today).not('duration_seconds', 'is', null),
     supabase.from('message_events').select('id', { count: 'exact', head: true }).eq('guild_id', G).gte('created_at', today),
     supabase.from('member_events').select('event_type, created_at').eq('guild_id', G).in('event_type', ['join','leave']).gte('created_at', today),
@@ -17,7 +17,14 @@ statsRouter.get('/overview', async (_req, res) => {
   const totalVoiceSecs = (voiceSessions.data ?? []).reduce((a, r) => a + (r.duration_seconds ?? 0), 0);
   const joins  = (recentJoins.data ?? []).filter(r => r.event_type === 'join').length;
   const leaves = (recentJoins.data ?? []).filter(r => r.event_type === 'leave').length;
-  res.json({ members: members.count, voiceHoursToday: +(totalVoiceSecs / 3600).toFixed(1), messagesToday: messages.count, joinsToday: joins, leavesToday: leaves });
+  res.json({
+    members:         guildStats.data?.member_count ?? null,
+    onlineCount:     guildStats.data?.online_count ?? null,
+    voiceHoursToday: +(totalVoiceSecs / 3600).toFixed(1),
+    messagesToday:   messages.count,
+    joinsToday:      joins,
+    leavesToday:     leaves,
+  });
 });
 
 // GET /api/stats/leaderboard/points
