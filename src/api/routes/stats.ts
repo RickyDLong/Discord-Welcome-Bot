@@ -91,6 +91,93 @@ statsRouter.get('/user/:userId', async (req, res) => {
   res.json({ points: pts.data?.points ?? 0, total_earned: pts.data?.total_earned ?? 0, streak: streak.data?.streak_count ?? 0, voice_seconds_today: voiceSecs, messages_today: msgs.count ?? 0, quests_completed: quests.count ?? 0 });
 });
 
+// GET /api/stats/quests/today
+statsRouter.get('/quests/today', async (_req, res) => {
+  const today = new Date().toISOString().split('T')[0]!;
+  const [quests, progress] = await Promise.all([
+    supabase.from('daily_quests').select('*').eq('guild_id', G).eq('quest_date', today).order('difficulty'),
+    supabase.from('daily_quest_progress').select('user_id, quest_id, progress, completed').eq('guild_id', G).eq('quest_date', today).eq('completed', true),
+  ]);
+  const totalCompletions = progress.data?.length ?? 0;
+  const uniqueCompleters = new Set(progress.data?.map(r => r.user_id)).size;
+  const tripleThreat = Object.entries(
+    (progress.data ?? []).reduce((acc: Record<string, number>, r) => {
+      acc[r.user_id] = (acc[r.user_id] ?? 0) + 1; return acc;
+    }, {}),
+  ).filter(([, c]) => c >= 3).map(([uid]) => uid);
+  res.json({ quests: quests.data ?? [], totalCompletions, uniqueCompleters, tripleThreat });
+});
+
+// GET /api/stats/achievements/recent?limit=10
+statsRouter.get('/achievements/recent', async (req, res) => {
+  const limit = Math.min(parseInt(req.query['limit'] as string) || 10, 50);
+  const { data } = await supabase
+    .from('user_achievements')
+    .select('user_id, achievement_id, earned_at, achievement_definitions(name, description, emoji, xp_reward)')
+    .eq('guild_id', G)
+    .order('earned_at', { ascending: false })
+    .limit(limit);
+  res.json(data ?? []);
+});
+
+// GET /api/stats/achievements/leaderboard — users ranked by achievement XP
+statsRouter.get('/achievements/leaderboard', async (_req, res) => {
+  const { data } = await supabase
+    .from('user_achievements')
+    .select('user_id, achievement_definitions(xp_reward)')
+    .eq('guild_id', G);
+  const totals = new Map<string, number>();
+  (data ?? []).forEach(r => {
+    const xp = (r.achievement_definitions as any)?.xp_reward ?? 0;
+    totals.set(r.user_id as string, (totals.get(r.user_id as string) ?? 0) + xp);
+  });
+  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([user_id, xp]) => ({ user_id, achievement_xp: xp }));
+  res.json(sorted);
+});
+
+// GET /api/stats/leaderboard/reactions?period=today|week|all
+statsRouter.get('/leaderboard/reactions', async (req, res) => {
+  const period = req.query['period'] as string ?? 'today';
+  let since = new Date(0).toISOString();
+  if (period === 'today') since = new Date().toISOString().split('T')[0]!;
+  if (period === 'week')  since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const { data } = await supabase.from('reaction_events').select('user_id').eq('guild_id', G).eq('event_type', 'add').gte('created_at', since);
+  const agg = new Map<string, number>();
+  (data ?? []).forEach(r => agg.set(r.user_id as string, (agg.get(r.user_id as string) ?? 0) + 1));
+  const sorted = [...agg.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([user_id, count]) => ({ user_id, count }));
+  res.json(sorted);
+});
+
+// GET /api/stats/tiers/distribution
+statsRouter.get('/tiers/distribution', async (_req, res) => {
+  const { data } = await supabase.from('user_points').select('total_earned').eq('guild_id', G);
+  const buckets: Record<string, number> = { Member: 0, Active: 0, Regular: 0, Veteran: 0, Elite: 0, Legend: 0 };
+  (data ?? []).forEach(r => {
+    const pts = (r.total_earned as number) ?? 0;
+    if (pts >= 15000)     buckets['Legend']!++;
+    else if (pts >= 5000) buckets['Elite']!++;
+    else if (pts >= 2000) buckets['Veteran']!++;
+    else if (pts >= 500)  buckets['Regular']!++;
+    else if (pts >= 100)  buckets['Active']!++;
+    else                  buckets['Member']!++;
+  });
+  res.json(buckets);
+});
+
+// GET /api/stats/activity/score — today's composite activity score
+statsRouter.get('/activity/score', async (_req, res) => {
+  const today = new Date().toISOString().split('T')[0]!;
+  const [msgs, voice, rxn, quests] = await Promise.all([
+    supabase.from('message_events').select('id', { count: 'exact', head: true }).eq('guild_id', G).gte('created_at', today),
+    supabase.from('voice_sessions').select('duration_seconds').eq('guild_id', G).gte('started_at', today).not('duration_seconds', 'is', null),
+    supabase.from('reaction_events').select('id', { count: 'exact', head: true }).eq('guild_id', G).eq('event_type', 'add').gte('created_at', today),
+    supabase.from('daily_quest_progress').select('id', { count: 'exact', head: true }).eq('guild_id', G).eq('quest_date', today).eq('completed', true),
+  ]);
+  const voiceMins = (voice.data ?? []).reduce((a, r) => a + ((r.duration_seconds as number) ?? 0), 0) / 60;
+  const score = Math.round((msgs.count ?? 0) * 1 + voiceMins * 2 + (rxn.count ?? 0) * 0.5 + (quests.count ?? 0) * 10);
+  res.json({ score, breakdown: { messages: msgs.count ?? 0, voice_minutes: Math.round(voiceMins), reactions: rxn.count ?? 0, quests_completed: quests.count ?? 0 } });
+});
+
 // GET /api/stats/activity/heatmap?userId=xxx
 statsRouter.get('/activity/heatmap', async (req, res) => {
   const userId = req.query['userId'] as string;
