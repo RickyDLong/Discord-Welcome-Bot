@@ -21,6 +21,15 @@ export async function handleMessageCreate(message: Message) {
       char_length: message.content.length,
     });
 
+    // Keep user profile up to date for display name resolution
+    void supabase.from('user_profiles').upsert({
+      guild_id:     guildId,
+      user_id:      userId,
+      username:     message.author.username,
+      display_name: message.member?.displayName ?? message.author.username,
+      updated_at:   new Date().toISOString(),
+    }, { onConflict: 'guild_id,user_id' });
+
     // Quest progress: count every message (no cooldown)
     await updateQuestProgress(guildId, userId, 'messages', 1, client);
 

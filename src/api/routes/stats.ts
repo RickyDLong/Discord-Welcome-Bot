@@ -31,7 +31,9 @@ statsRouter.get('/overview', async (_req, res) => {
 statsRouter.get('/leaderboard/points', async (req, res) => {
   const limit = Math.min(parseInt(req.query['limit'] as string) || 10, 50);
   const { data } = await supabase.from('user_points').select('user_id, points, total_earned').eq('guild_id', G).order('total_earned', { ascending: false }).limit(limit);
-  res.json(data ?? []);
+  const names = await resolveNames((data ?? []).map(r => r.user_id as string));
+  const enriched = (data ?? []).map(r => ({ ...r, display_name: names.get(r.user_id as string) ?? `…${(r.user_id as string).slice(-4)}` }));
+  res.json(enriched);
 });
 
 // GET /api/stats/leaderboard/voice?period=today|week|all
@@ -43,8 +45,9 @@ statsRouter.get('/leaderboard/voice', async (req, res) => {
   const { data } = await supabase.from('voice_sessions').select('user_id, duration_seconds').eq('guild_id', G).gte('started_at', since).not('duration_seconds', 'is', null);
   const agg = new Map<string, number>();
   (data ?? []).forEach(r => agg.set(r.user_id, (agg.get(r.user_id) ?? 0) + r.duration_seconds));
-  const sorted = [...agg.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([user_id, seconds]) => ({ user_id, seconds }));
-  res.json(sorted);
+  const sorted = [...agg.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const names = await resolveNames(sorted.map(([uid]) => uid));
+  res.json(sorted.map(([user_id, seconds]) => ({ user_id, seconds, display_name: names.get(user_id) ?? `…${user_id.slice(-4)}` })));
 });
 
 // GET /api/stats/leaderboard/messages?period=today|week|all
@@ -56,14 +59,17 @@ statsRouter.get('/leaderboard/messages', async (req, res) => {
   const { data } = await supabase.from('message_events').select('user_id').eq('guild_id', G).gte('created_at', since);
   const agg = new Map<string, number>();
   (data ?? []).forEach(r => agg.set(r.user_id, (agg.get(r.user_id) ?? 0) + 1));
-  const sorted = [...agg.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([user_id, count]) => ({ user_id, count }));
-  res.json(sorted);
+  const sorted = [...agg.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const names = await resolveNames(sorted.map(([uid]) => uid));
+  res.json(sorted.map(([user_id, count]) => ({ user_id, count, display_name: names.get(user_id) ?? `…${user_id.slice(-4)}` })));
 });
 
 // GET /api/stats/leaderboard/streaks
 statsRouter.get('/leaderboard/streaks', async (_req, res) => {
   const { data } = await supabase.from('daily_streaks').select('user_id, streak_count').eq('guild_id', G).order('streak_count', { ascending: false }).limit(10);
-  res.json(data ?? []);
+  const names = await resolveNames((data ?? []).map(r => r.user_id as string));
+  const enriched = (data ?? []).map(r => ({ ...r, display_name: names.get(r.user_id as string) ?? `…${(r.user_id as string).slice(-4)}` }));
+  res.json(enriched);
 });
 
 // GET /api/stats/voice/live
@@ -115,6 +121,13 @@ statsRouter.get('/quests/today', async (_req, res) => {
   res.json({ quests: quests.data ?? [], totalCompletions, uniqueCompleters, tripleThreat });
 });
 
+// Helper: resolve display names for a list of user_ids
+async function resolveNames(userIds: string[]): Promise<Map<string, string>> {
+  if (userIds.length === 0) return new Map();
+  const { data } = await supabase.from('user_profiles').select('user_id, display_name, username').eq('guild_id', G).in('user_id', userIds);
+  return new Map((data ?? []).map(p => [p.user_id, p.display_name ?? p.username ?? `…${p.user_id.slice(-4)}`]));
+}
+
 // GET /api/stats/achievements/recent?limit=10
 statsRouter.get('/achievements/recent', async (req, res) => {
   const limit = Math.min(parseInt(req.query['limit'] as string) || 10, 50);
@@ -124,7 +137,9 @@ statsRouter.get('/achievements/recent', async (req, res) => {
     .eq('guild_id', G)
     .order('earned_at', { ascending: false })
     .limit(limit);
-  res.json(data ?? []);
+  const names = await resolveNames([...new Set((data ?? []).map(r => r.user_id as string))]);
+  const enriched = (data ?? []).map(r => ({ ...r, display_name: names.get(r.user_id as string) ?? `…${(r.user_id as string).slice(-4)}` }));
+  res.json(enriched);
 });
 
 // GET /api/stats/achievements/leaderboard — users ranked by achievement XP
@@ -138,8 +153,9 @@ statsRouter.get('/achievements/leaderboard', async (_req, res) => {
     const xp = (r.achievement_definitions as any)?.xp_reward ?? 0;
     totals.set(r.user_id as string, (totals.get(r.user_id as string) ?? 0) + xp);
   });
-  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([user_id, xp]) => ({ user_id, achievement_xp: xp }));
-  res.json(sorted);
+  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const names = await resolveNames(sorted.map(([uid]) => uid));
+  res.json(sorted.map(([user_id, xp]) => ({ user_id, achievement_xp: xp, display_name: names.get(user_id) ?? `…${user_id.slice(-4)}` })));
 });
 
 // GET /api/stats/leaderboard/reactions?period=today|week|all
@@ -151,8 +167,9 @@ statsRouter.get('/leaderboard/reactions', async (req, res) => {
   const { data } = await supabase.from('reaction_events').select('user_id').eq('guild_id', G).eq('event_type', 'add').gte('created_at', since);
   const agg = new Map<string, number>();
   (data ?? []).forEach(r => agg.set(r.user_id as string, (agg.get(r.user_id as string) ?? 0) + 1));
-  const sorted = [...agg.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([user_id, count]) => ({ user_id, count }));
-  res.json(sorted);
+  const sorted = [...agg.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const names = await resolveNames(sorted.map(([uid]) => uid));
+  res.json(sorted.map(([user_id, count]) => ({ user_id, count, display_name: names.get(user_id) ?? `…${user_id.slice(-4)}` })));
 });
 
 // GET /api/stats/tiers/distribution

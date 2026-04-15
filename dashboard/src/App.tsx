@@ -16,13 +16,13 @@ interface Overview {
   joinsToday: number
   leavesToday: number
 }
-interface PointsEntry  { user_id: string; points: number; total_earned: number }
-interface VoiceEntry   { user_id: string; seconds: number }
-interface MsgEntry     { user_id: string; count: number }
-interface StreakEntry   { user_id: string; streak_count: number }
+interface PointsEntry  { user_id: string; points: number; total_earned: number; display_name?: string }
+interface VoiceEntry   { user_id: string; seconds: number; display_name?: string }
+interface MsgEntry     { user_id: string; count: number; display_name?: string }
+interface StreakEntry   { user_id: string; streak_count: number; display_name?: string }
 interface VoiceLive    { channel_id: string; channel_name: string; member_count: number; snapshot_at: string }
 interface MemberEvent  { event_type: 'join' | 'leave'; created_at: string }
-interface ReactionEntry { user_id: string; count: number }
+interface ReactionEntry { user_id: string; count: number; display_name?: string }
 interface ActivityScore {
   score: number
   breakdown: { messages: number; voice_minutes: number; reactions: number; quests_completed: number }
@@ -32,11 +32,12 @@ interface QuestDef { id: string; title: string; description: string; difficulty:
 interface QuestPulse { quests: QuestDef[]; totalCompletions: number; uniqueCompleters: number; tripleThreat: string[] }
 interface AchievementEntry {
   user_id: string
+  display_name?: string
   achievement_id: string
   earned_at: string
   achievement_definitions: { name: string; description: string; emoji: string; xp_reward: number } | null
 }
-interface AchievementXP { user_id: string; achievement_xp: number }
+interface AchievementXP { user_id: string; achievement_xp: number; display_name?: string }
 type Period = 'today' | 'week' | 'all'
 type Section = 'overview' | 'leaderboards' | 'voice' | 'growth' | 'heatmap' | 'achievements'
 
@@ -401,42 +402,42 @@ function Leaderboards() {
         <LBCard
           title="All-Time XP" icon="🏆" loading={pts.loading} empty="No data yet"
           rows={(pts.data ?? []).slice(0,5).map(r => ({
-            label: `User …${shortId(r.user_id)}`,
+            label: r.display_name ?? `…${r.user_id.slice(-4)}`,
             value: r.total_earned.toLocaleString(),
           }))}
         />
         <LBCard
           title="Voice Time" icon="🎙️" loading={voice.loading} empty="No voice activity"
           rows={(voice.data ?? []).slice(0,5).map(r => ({
-            label: `User …${shortId(r.user_id)}`,
+            label: r.display_name ?? `…${r.user_id.slice(-4)}`,
             value: fmtSecs(r.seconds),
           }))}
         />
         <LBCard
           title="Messages" icon="💬" loading={msgs.loading} empty="No messages yet"
           rows={(msgs.data ?? []).slice(0,5).map(r => ({
-            label: `User …${shortId(r.user_id)}`,
+            label: r.display_name ?? `…${r.user_id.slice(-4)}`,
             value: r.count.toLocaleString(),
           }))}
         />
         <LBCard
           title="Reactions" icon="⚡" loading={rxn.loading} empty="No reactions yet"
           rows={(rxn.data ?? []).slice(0,5).map(r => ({
-            label: `User …${shortId(r.user_id)}`,
+            label: r.display_name ?? `…${r.user_id.slice(-4)}`,
             value: r.count.toLocaleString(),
           }))}
         />
         <LBCard
           title="Streaks" icon="🔥" loading={streaks.loading} empty="No streaks yet"
           rows={(streaks.data ?? []).slice(0,5).map(r => ({
-            label: `User …${shortId(r.user_id)}`,
+            label: r.display_name ?? `…${r.user_id.slice(-4)}`,
             value: `${r.streak_count}d`,
           }))}
         />
         <LBCard
           title="Achievement XP" icon="🏅" loading={achXP.loading} empty="No achievements yet"
           rows={(achXP.data ?? []).slice(0,5).map(r => ({
-            label: `User …${shortId(r.user_id)}`,
+            label: r.display_name ?? `…${r.user_id.slice(-4)}`,
             value: r.achievement_xp.toLocaleString(),
           }))}
         />
@@ -747,7 +748,7 @@ function Achievements() {
                     )}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--mono)', minWidth: 60, textAlign: 'right' }}>
-                    …{shortId(a.user_id)}
+                    {a.display_name ?? `…${a.user_id.slice(-4)}`}
                   </div>
                 </Card>
               )
@@ -768,7 +769,7 @@ function Achievements() {
             <p style={{ color: 'var(--text-3)', fontSize: 12, padding: '12px 0' }}>No data yet</p>
           ) : (
             (top.data ?? []).map((r, i) => (
-              <LBRow key={i} rank={i} label={`User …${shortId(r.user_id)}`} value={`${r.achievement_xp.toLocaleString()} XP`} isFirst={i === 0} />
+              <LBRow key={i} rank={i} label={r.display_name ?? `…${r.user_id.slice(-4)}`} value={`${r.achievement_xp.toLocaleString()} XP`} isFirst={i === 0} />
             ))
           )}
         </Card>
