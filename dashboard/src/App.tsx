@@ -28,7 +28,7 @@ interface ActivityScore {
   breakdown: { messages: number; voice_minutes: number; reactions: number; quests_completed: number }
 }
 interface TierDist { Member: number; Active: number; Regular: number; Veteran: number; Elite: number; Legend: number }
-interface QuestDef { id: string; name: string; description: string; difficulty: string; xp_reward: number; quest_type: string; target_count: number }
+interface QuestDef { id: string; title: string; description: string; difficulty: string; xp_reward: number; quest_type: string; target_value: number }
 interface QuestPulse { quests: QuestDef[]; totalCompletions: number; uniqueCompleters: number; tripleThreat: string[] }
 interface AchievementEntry {
   user_id: string
@@ -232,7 +232,7 @@ function QuestPulseCard() {
           {data.quests.map(q => (
             <div key={q.id} style={{ padding: '8px 10px', background: 'var(--elevated)', borderRadius: 6 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                <span style={{ fontSize: 12, fontWeight: 600 }}>{q.name}</span>
+                <span style={{ fontSize: 12, fontWeight: 600 }}>{q.title}</span>
                 <span style={{ fontSize: 10, color: diffColor(q.difficulty), fontWeight: 700, textTransform: 'uppercase' }}>{q.difficulty}</span>
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{q.description}</div>

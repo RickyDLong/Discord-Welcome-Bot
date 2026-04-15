@@ -310,4 +310,20 @@ export async function updateDashboard(client: Client): Promise<void> {
       )
       .setFooter({ text: 'Last updated' })
       .setTimestamp();
+
+    // Edit existing message or post new
+    const messages = await channel.messages.fetch({ limit: 10 });
+    const existing = messages.find(
+      m => m.author.id === client.user?.id && m.embeds[0]?.title?.includes('Archix Digital'),
+    );
+
+    if (existing) {
+      await existing.edit({ embeds: [embed] });
+    } else {
+      await channel.send({ embeds: [embed] });
+    }
+  } catch (err) {
+    console.error('[Dashboard] Update error:', err);
+  }
+}
 
