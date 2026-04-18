@@ -58,7 +58,14 @@ export async function handleVoiceStateUpdate(oldState: VoiceState, newState: Voi
         voiceSessions.delete(k);
       }
     } else if (!oldState.channelId && newState.channelId) {
-      // User joined voice
+      // User joined voice — seed display name into user_profiles
+      void supabase.from('user_profiles').upsert({
+        guild_id:     guildId,
+        user_id:      userId,
+        username:     newState.member?.user.username ?? userId,
+        display_name: newState.member?.displayName ?? newState.member?.user.username ?? userId,
+        updated_at:   new Date().toISOString(),
+      }, { onConflict: 'guild_id,user_id' });
       voiceSessions.set(k, { channelId: newState.channelId, joinedAt: new Date() });
     } else if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
       // User switched channels
