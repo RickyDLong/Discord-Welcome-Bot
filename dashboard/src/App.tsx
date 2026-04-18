@@ -20,7 +20,8 @@ interface PointsEntry  { user_id: string; points: number; total_earned: number; 
 interface VoiceEntry   { user_id: string; seconds: number; display_name?: string; avatar_url?: string }
 interface MsgEntry     { user_id: string; count: number; display_name?: string; avatar_url?: string }
 interface StreakEntry   { user_id: string; streak_count: number; display_name?: string; avatar_url?: string }
-interface VoiceLive    { channel_id: string; channel_name: string; member_count: number; snapshot_at: string }
+interface VoiceMember  { user_id: string; display_name: string; avatar_url?: string }
+interface VoiceLive    { channel_id: string; channel_name: string; member_count: number; snapshot_at: string; members?: VoiceMember[] }
 interface MemberEvent  { event_type: 'join' | 'leave'; created_at: string }
 interface ReactionEntry { user_id: string; count: number; display_name?: string; avatar_url?: string }
 interface ActivityScore {
@@ -499,21 +500,49 @@ function LiveVoice() {
           </p>
         </Card>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
           {active.map(ch => (
             <Card key={ch.channel_id} style={{ borderColor: 'var(--green)33' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              {/* Channel header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <Pulse color="var(--green)" />
-                <span style={{ fontWeight: 600, fontSize: 13 }}>{ch.channel_name || `Channel ${shortId(ch.channel_id)}`}</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 22, fontWeight: 700, color: 'var(--green)' }}>
-                  {ch.member_count}
+                <span style={{ fontWeight: 600, fontSize: 13, flex: 1 }}>
+                  {ch.channel_name || `Channel ${shortId(ch.channel_id)}`}
                 </span>
-                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                  {ch.member_count === 1 ? 'member' : 'members'}
+                <span style={{
+                  fontFamily: 'var(--mono)', fontSize: 11, fontWeight: 700,
+                  color: 'var(--green)', background: 'var(--green)18',
+                  padding: '2px 7px', borderRadius: 10,
+                }}>
+                  {ch.member_count} {ch.member_count === 1 ? 'member' : 'members'}
                 </span>
               </div>
+              {/* Member cards */}
+              {(ch.members ?? []).length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {(ch.members ?? []).map(m => (
+                    <div key={m.user_id} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '6px 10px', borderRadius: 6,
+                      background: 'var(--elevated)',
+                    }}>
+                      <Avatar url={m.avatar_url} name={m.display_name} size={30} />
+                      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {m.display_name}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontFamily: 'var(--mono)', fontSize: 22, fontWeight: 700, color: 'var(--green)' }}>
+                    {ch.member_count}
+                  </span>
+                  <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                    {ch.member_count === 1 ? 'member' : 'members'}
+                  </span>
+                </div>
+              )}
             </Card>
           ))}
         </div>

@@ -75,10 +75,28 @@ statsRouter.get('/leaderboard/streaks', async (_req, res) => {
 // GET /api/stats/voice/live
 statsRouter.get('/voice/live', async (_req, res) => {
   const { data } = await supabase.from('voice_channel_snapshots').select('*').eq('guild_id', G).order('snapshot_at', { ascending: false }).limit(20);
-  // Return most recent snapshot per channel
+  // Most recent snapshot per channel
   const latest = new Map<string, any>();
   (data ?? []).forEach(r => { if (!latest.has(r.channel_id)) latest.set(r.channel_id, r); });
-  res.json([...latest.values()]);
+  const channels = [...latest.values()];
+
+  // Collect all unique user_ids across all channels
+  const allUserIds = [...new Set(
+    channels.flatMap(ch => ((ch.members as any[]) ?? []).map((m: any) => m.user_id as string))
+  )];
+  const profiles = await resolveProfiles(allUserIds);
+
+  // Enrich each channel's members array with display_name + avatar_url
+  const enriched = channels.map(ch => ({
+    ...ch,
+    members: ((ch.members as any[]) ?? []).map((m: any) => ({
+      user_id:      m.user_id,
+      display_name: profiles.get(m.user_id)?.name ?? m.username ?? `…${m.user_id.slice(-4)}`,
+      avatar_url:   profiles.get(m.user_id)?.avatarUrl,
+    })),
+  }));
+
+  res.json(enriched);
 });
 
 // GET /api/stats/members/timeline?days=30
