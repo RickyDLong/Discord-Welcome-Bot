@@ -64,6 +64,7 @@ export async function handleVoiceStateUpdate(oldState: VoiceState, newState: Voi
         user_id:      userId,
         username:     newState.member?.user.username ?? userId,
         display_name: newState.member?.displayName ?? newState.member?.user.username ?? userId,
+        avatar_hash:  newState.member?.user.avatar ?? null,
         updated_at:   new Date().toISOString(),
       }, { onConflict: 'guild_id,user_id' });
       voiceSessions.set(k, { channelId: newState.channelId, joinedAt: new Date() });

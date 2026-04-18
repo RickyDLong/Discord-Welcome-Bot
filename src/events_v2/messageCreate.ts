@@ -27,6 +27,7 @@ export async function handleMessageCreate(message: Message) {
       user_id:      userId,
       username:     message.author.username,
       display_name: message.member?.displayName ?? message.author.username,
+      avatar_hash:  message.author.avatar,
       updated_at:   new Date().toISOString(),
     }, { onConflict: 'guild_id,user_id' });
 

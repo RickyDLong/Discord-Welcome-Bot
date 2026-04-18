@@ -16,13 +16,13 @@ interface Overview {
   joinsToday: number
   leavesToday: number
 }
-interface PointsEntry  { user_id: string; points: number; total_earned: number; display_name?: string }
-interface VoiceEntry   { user_id: string; seconds: number; display_name?: string }
-interface MsgEntry     { user_id: string; count: number; display_name?: string }
-interface StreakEntry   { user_id: string; streak_count: number; display_name?: string }
+interface PointsEntry  { user_id: string; points: number; total_earned: number; display_name?: string; avatar_url?: string }
+interface VoiceEntry   { user_id: string; seconds: number; display_name?: string; avatar_url?: string }
+interface MsgEntry     { user_id: string; count: number; display_name?: string; avatar_url?: string }
+interface StreakEntry   { user_id: string; streak_count: number; display_name?: string; avatar_url?: string }
 interface VoiceLive    { channel_id: string; channel_name: string; member_count: number; snapshot_at: string }
 interface MemberEvent  { event_type: 'join' | 'leave'; created_at: string }
-interface ReactionEntry { user_id: string; count: number; display_name?: string }
+interface ReactionEntry { user_id: string; count: number; display_name?: string; avatar_url?: string }
 interface ActivityScore {
   score: number
   breakdown: { messages: number; voice_minutes: number; reactions: number; quests_completed: number }
@@ -33,13 +33,15 @@ interface QuestPulse { quests: QuestDef[]; totalCompletions: number; uniqueCompl
 interface AchievementEntry {
   user_id: string
   display_name?: string
+  avatar_url?: string
   achievement_id: string
   earned_at: string
   achievement_definitions: { name: string; description: string; emoji: string; xp_reward: number } | null
 }
-interface AchievementXP { user_id: string; achievement_xp: number; display_name?: string }
+interface AchievementXP { user_id: string; achievement_xp: number; display_name?: string; avatar_url?: string }
+interface MemberEntry { user_id: string; display_name: string; avatar_url: string; total_earned: number; points: number; streak: number }
 type Period = 'today' | 'week' | 'all'
-type Section = 'overview' | 'leaderboards' | 'voice' | 'growth' | 'heatmap' | 'achievements'
+type Section = 'overview' | 'leaderboards' | 'voice' | 'growth' | 'heatmap' | 'achievements' | 'members'
 
 // ─── API HELPERS ─────────────────────────────────────────────────────────────
 async function apiFetch<T>(path: string): Promise<T> {
@@ -314,21 +316,46 @@ function Overview() {
   )
 }
 
+// ─── AVATAR ──────────────────────────────────────────────────────────────────
+function Avatar({ url, name, size = 28 }: { url?: string; name: string; size?: number }) {
+  const [err, setErr] = useState(false)
+  const hue = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % 360
+  const initials = name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toUpperCase() || '?'
+  if (!url || err) {
+    return (
+      <div style={{
+        width: size, height: size, borderRadius: '50%', flexShrink: 0,
+        background: `hsl(${hue},55%,32%)`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: size * 0.38, fontWeight: 700, color: '#fff',
+        border: '1.5px solid rgba(255,255,255,0.1)',
+      }}>{initials}</div>
+    )
+  }
+  return (
+    <img src={url} alt={name} onError={() => setErr(true)} style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      objectFit: 'cover', border: '1.5px solid rgba(255,255,255,0.1)',
+    }} />
+  )
+}
+
 // ─── LEADERBOARD ROW ─────────────────────────────────────────────────────────
-function LBRow({ rank, label, value, isFirst }: { rank: number; label: string; value: string; isFirst: boolean }) {
+function LBRow({ rank, label, value, isFirst, avatarUrl }: { rank: number; label: string; value: string; isFirst: boolean; avatarUrl?: string }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0',
+      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
       borderBottom: '1px solid var(--border)',
       background: isFirst ? 'var(--primary-lo)' : 'transparent',
       borderRadius: isFirst ? 6 : 0,
       paddingLeft: isFirst ? 10 : 0,
     }}>
       <span style={{
-        width: 24, fontSize: isFirst ? 16 : 12,
+        width: 22, fontSize: isFirst ? 15 : 11,
         color: isFirst ? 'var(--gold)' : 'var(--text-3)',
         fontFamily: 'var(--mono)', fontWeight: 700, flexShrink: 0, textAlign: 'center',
       }}>{medal(rank)}</span>
+      <Avatar url={avatarUrl} name={label} size={26} />
       <span style={{
         flex: 1, fontSize: 13, fontWeight: rank === 0 ? 600 : 400,
         color: rank === 0 ? 'var(--text)' : 'var(--text-2)',
@@ -342,7 +369,7 @@ function LBRow({ rank, label, value, isFirst }: { rank: number; label: string; v
 }
 
 function LBCard({ title, icon, rows, loading, empty }: {
-  title: string; icon: string; rows: { label: string; value: string }[]; loading: boolean; empty: string
+  title: string; icon: string; rows: { label: string; value: string; avatarUrl?: string }[]; loading: boolean; empty: string
 }) {
   return (
     <Card>
@@ -355,7 +382,7 @@ function LBCard({ title, icon, rows, loading, empty }: {
         : rows.length === 0
           ? <p style={{ color: 'var(--text-3)', fontSize: 12, padding: '12px 0' }}>{empty}</p>
           : rows.map((r, i) => (
-              <LBRow key={i} rank={i} label={r.label} value={r.value} isFirst={i === 0} />
+              <LBRow key={i} rank={i} label={r.label} value={r.value} isFirst={i === 0} avatarUrl={r.avatarUrl} />
             ))
       }
     </Card>
@@ -404,6 +431,7 @@ function Leaderboards() {
           rows={(pts.data ?? []).slice(0,5).map(r => ({
             label: r.display_name ?? `…${r.user_id.slice(-4)}`,
             value: r.total_earned.toLocaleString(),
+            avatarUrl: r.avatar_url,
           }))}
         />
         <LBCard
@@ -411,6 +439,7 @@ function Leaderboards() {
           rows={(voice.data ?? []).slice(0,5).map(r => ({
             label: r.display_name ?? `…${r.user_id.slice(-4)}`,
             value: fmtSecs(r.seconds),
+            avatarUrl: r.avatar_url,
           }))}
         />
         <LBCard
@@ -418,6 +447,7 @@ function Leaderboards() {
           rows={(msgs.data ?? []).slice(0,5).map(r => ({
             label: r.display_name ?? `…${r.user_id.slice(-4)}`,
             value: r.count.toLocaleString(),
+            avatarUrl: r.avatar_url,
           }))}
         />
         <LBCard
@@ -425,6 +455,7 @@ function Leaderboards() {
           rows={(rxn.data ?? []).slice(0,5).map(r => ({
             label: r.display_name ?? `…${r.user_id.slice(-4)}`,
             value: r.count.toLocaleString(),
+            avatarUrl: r.avatar_url,
           }))}
         />
         <LBCard
@@ -432,6 +463,7 @@ function Leaderboards() {
           rows={(streaks.data ?? []).slice(0,5).map(r => ({
             label: r.display_name ?? `…${r.user_id.slice(-4)}`,
             value: `${r.streak_count}d`,
+            avatarUrl: r.avatar_url,
           }))}
         />
         <LBCard
@@ -439,6 +471,7 @@ function Leaderboards() {
           rows={(achXP.data ?? []).slice(0,5).map(r => ({
             label: r.display_name ?? `…${r.user_id.slice(-4)}`,
             value: r.achievement_xp.toLocaleString(),
+            avatarUrl: r.avatar_url,
           }))}
         />
       </div>
@@ -747,8 +780,11 @@ function Achievements() {
                       <div style={{ fontSize: 11, color: '#f59e0b', fontFamily: 'var(--mono)', fontWeight: 700 }}>+{def.xp_reward} XP</div>
                     )}
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--mono)', minWidth: 60, textAlign: 'right' }}>
-                    {a.display_name ?? `…${a.user_id.slice(-4)}`}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <Avatar url={a.avatar_url} name={a.display_name ?? a.user_id} size={22} />
+                    <span style={{ fontSize: 12, color: 'var(--text-2)', fontWeight: 500, maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {a.display_name ?? `…${a.user_id.slice(-4)}`}
+                    </span>
                   </div>
                 </Card>
               )
@@ -769,11 +805,69 @@ function Achievements() {
             <p style={{ color: 'var(--text-3)', fontSize: 12, padding: '12px 0' }}>No data yet</p>
           ) : (
             (top.data ?? []).map((r, i) => (
-              <LBRow key={i} rank={i} label={r.display_name ?? `…${r.user_id.slice(-4)}`} value={`${r.achievement_xp.toLocaleString()} XP`} isFirst={i === 0} />
+              <LBRow key={i} rank={i} label={r.display_name ?? `…${r.user_id.slice(-4)}`} value={`${r.achievement_xp.toLocaleString()} XP`} isFirst={i === 0} avatarUrl={r.avatar_url} />
             ))
           )}
         </Card>
       </div>
+    </div>
+  )
+}
+
+// ─── MEMBERS ─────────────────────────────────────────────────────────────────
+function Members() {
+  const { data, loading } = useData<MemberEntry[]>(() => apiFetch('/api/stats/members'))
+
+  const tierForXP = (xp: number) => {
+    if (xp >= 15000) return { name: 'Legend',  color: '#e74c3c', emoji: '🔴' }
+    if (xp >= 5000)  return { name: 'Elite',   color: '#f39c12', emoji: '🟡' }
+    if (xp >= 2000)  return { name: 'Veteran', color: '#9b59b6', emoji: '🟣' }
+    if (xp >= 500)   return { name: 'Regular', color: '#2ecc71', emoji: '🟢' }
+    if (xp >= 100)   return { name: 'Active',  color: '#3498db', emoji: '🔵' }
+    return           { name: 'Member',  color: '#95a5a6', emoji: '⚪' }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <SectionHeader
+        title="Members"
+        sub={loading ? 'Loading…' : `${(data ?? []).length} members tracked`}
+      />
+      {loading ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+          {Array.from({ length: 12 }).map((_, i) => <Card key={i}><Skeleton /></Card>)}
+        </div>
+      ) : (data ?? []).length === 0 ? (
+        <Card><p style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: '30px 0' }}>No member profiles yet — members appear here after sending a message or joining voice.</p></Card>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+          {(data ?? []).map(m => {
+            const tier = tierForXP(m.total_earned)
+            return (
+              <Card key={m.user_id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '18px 14px', textAlign: 'center' }}>
+                <div style={{ position: 'relative' }}>
+                  <Avatar url={m.avatar_url} name={m.display_name} size={52} />
+                  <span style={{
+                    position: 'absolute', bottom: -4, right: -4,
+                    fontSize: 14, lineHeight: 1,
+                  }}>{tier.emoji}</span>
+                </div>
+                <div style={{ width: '100%' }}>
+                  <div style={{
+                    fontSize: 13, fontWeight: 600, color: 'var(--text)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{m.display_name}</div>
+                  <div style={{ fontSize: 11, color: tier.color, fontWeight: 600, marginTop: 2 }}>{tier.name}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 10, fontSize: 11, color: 'var(--text-3)' }}>
+                  <span title="Total XP">⚡ {m.total_earned.toLocaleString()}</span>
+                  {m.streak > 0 && <span title="Streak">🔥 {m.streak}d</span>}
+                </div>
+              </Card>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -783,6 +877,7 @@ const SECTIONS: { id: Section; label: string; icon: string }[] = [
   { id: 'overview',      label: 'Overview',     icon: '📊' },
   { id: 'leaderboards',  label: 'Leaderboards', icon: '🏆' },
   { id: 'achievements',  label: 'Achievements', icon: '🏅' },
+  { id: 'members',       label: 'Members',      icon: '👥' },
   { id: 'voice',         label: 'Live Voice',   icon: '🔊' },
   { id: 'growth',        label: 'Growth',       icon: '📈' },
   { id: 'heatmap',       label: 'Heatmap',      icon: '🔥' },
@@ -870,6 +965,7 @@ export default function App() {
     overview:     <Overview key={`ov-${refreshKey}`} />,
     leaderboards: <Leaderboards key={`lb-${refreshKey}`} />,
     achievements: <Achievements key={`ac-${refreshKey}`} />,
+    members:      <Members key={`mb-${refreshKey}`} />,
     voice:        <LiveVoice key={`lv-${refreshKey}`} />,
     growth:       <MemberGrowth key={`mg-${refreshKey}`} />,
     heatmap:      <ActivityHeatmap key={`hm-${refreshKey}`} />,

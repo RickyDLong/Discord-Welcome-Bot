@@ -31,8 +31,8 @@ statsRouter.get('/overview', async (_req, res) => {
 statsRouter.get('/leaderboard/points', async (req, res) => {
   const limit = Math.min(parseInt(req.query['limit'] as string) || 10, 50);
   const { data } = await supabase.from('user_points').select('user_id, points, total_earned').eq('guild_id', G).order('total_earned', { ascending: false }).limit(limit);
-  const names = await resolveNames((data ?? []).map(r => r.user_id as string));
-  const enriched = (data ?? []).map(r => ({ ...r, display_name: names.get(r.user_id as string) ?? `…${(r.user_id as string).slice(-4)}` }));
+  const profiles = await resolveProfiles((data ?? []).map(r => r.user_id as string));
+  const enriched = (data ?? []).map(r => ({ ...r, display_name: profiles.get(r.user_id as string)?.name ?? `…${(r.user_id as string).slice(-4)}`, avatar_url: profiles.get(r.user_id as string)?.avatarUrl }));
   res.json(enriched);
 });
 
@@ -46,8 +46,8 @@ statsRouter.get('/leaderboard/voice', async (req, res) => {
   const agg = new Map<string, number>();
   (data ?? []).forEach(r => agg.set(r.user_id, (agg.get(r.user_id) ?? 0) + r.duration_seconds));
   const sorted = [...agg.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
-  const names = await resolveNames(sorted.map(([uid]) => uid));
-  res.json(sorted.map(([user_id, seconds]) => ({ user_id, seconds, display_name: names.get(user_id) ?? `…${user_id.slice(-4)}` })));
+  const profiles = await resolveProfiles(sorted.map(([uid]) => uid));
+  res.json(sorted.map(([user_id, seconds]) => ({ user_id, seconds, display_name: profiles.get(user_id)?.name ?? `…${user_id.slice(-4)}`, avatar_url: profiles.get(user_id)?.avatarUrl })));
 });
 
 // GET /api/stats/leaderboard/messages?period=today|week|all
@@ -60,15 +60,15 @@ statsRouter.get('/leaderboard/messages', async (req, res) => {
   const agg = new Map<string, number>();
   (data ?? []).forEach(r => agg.set(r.user_id, (agg.get(r.user_id) ?? 0) + 1));
   const sorted = [...agg.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
-  const names = await resolveNames(sorted.map(([uid]) => uid));
-  res.json(sorted.map(([user_id, count]) => ({ user_id, count, display_name: names.get(user_id) ?? `…${user_id.slice(-4)}` })));
+  const profiles = await resolveProfiles(sorted.map(([uid]) => uid));
+  res.json(sorted.map(([user_id, count]) => ({ user_id, count, display_name: profiles.get(user_id)?.name ?? `…${user_id.slice(-4)}`, avatar_url: profiles.get(user_id)?.avatarUrl })));
 });
 
 // GET /api/stats/leaderboard/streaks
 statsRouter.get('/leaderboard/streaks', async (_req, res) => {
   const { data } = await supabase.from('daily_streaks').select('user_id, streak_count').eq('guild_id', G).order('streak_count', { ascending: false }).limit(10);
-  const names = await resolveNames((data ?? []).map(r => r.user_id as string));
-  const enriched = (data ?? []).map(r => ({ ...r, display_name: names.get(r.user_id as string) ?? `…${(r.user_id as string).slice(-4)}` }));
+  const profiles = await resolveProfiles((data ?? []).map(r => r.user_id as string));
+  const enriched = (data ?? []).map(r => ({ ...r, display_name: profiles.get(r.user_id as string)?.name ?? `…${(r.user_id as string).slice(-4)}`, avatar_url: profiles.get(r.user_id as string)?.avatarUrl }));
   res.json(enriched);
 });
 
@@ -121,11 +121,31 @@ statsRouter.get('/quests/today', async (_req, res) => {
   res.json({ quests: quests.data ?? [], totalCompletions, uniqueCompleters, tripleThreat });
 });
 
-// Helper: resolve display names for a list of user_ids
-async function resolveNames(userIds: string[]): Promise<Map<string, string>> {
+// Helper: build Discord CDN avatar URL
+function buildAvatarUrl(userId: string, avatarHash: string | null): string {
+  if (!avatarHash) {
+    const index = Number(BigInt(userId) >> 22n) % 5;
+    return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
+  }
+  return `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.png?size=64`;
+}
+
+interface UserProfile { name: string; avatarUrl: string }
+
+// Helper: resolve display names + avatars for a list of user_ids
+async function resolveProfiles(userIds: string[]): Promise<Map<string, UserProfile>> {
   if (userIds.length === 0) return new Map();
-  const { data } = await supabase.from('user_profiles').select('user_id, display_name, username').eq('guild_id', G).in('user_id', userIds);
-  return new Map((data ?? []).map(p => [p.user_id, p.display_name ?? p.username ?? `…${p.user_id.slice(-4)}`]));
+  const { data } = await supabase.from('user_profiles').select('user_id, display_name, username, avatar_hash').eq('guild_id', G).in('user_id', userIds);
+  return new Map((data ?? []).map(p => [p.user_id, {
+    name:      p.display_name ?? p.username ?? `…${p.user_id.slice(-4)}`,
+    avatarUrl: buildAvatarUrl(p.user_id as string, p.avatar_hash as string | null),
+  }]));
+}
+
+// Convenience wrapper for callers that only need the name
+async function resolveNames(userIds: string[]): Promise<Map<string, string>> {
+  const profiles = await resolveProfiles(userIds);
+  return new Map([...profiles.entries()].map(([id, p]) => [id, p.name]));
 }
 
 // GET /api/stats/achievements/recent?limit=10
@@ -137,8 +157,8 @@ statsRouter.get('/achievements/recent', async (req, res) => {
     .eq('guild_id', G)
     .order('earned_at', { ascending: false })
     .limit(limit);
-  const names = await resolveNames([...new Set((data ?? []).map(r => r.user_id as string))]);
-  const enriched = (data ?? []).map(r => ({ ...r, display_name: names.get(r.user_id as string) ?? `…${(r.user_id as string).slice(-4)}` }));
+  const profiles = await resolveProfiles([...new Set((data ?? []).map(r => r.user_id as string))]);
+  const enriched = (data ?? []).map(r => ({ ...r, display_name: profiles.get(r.user_id as string)?.name ?? `…${(r.user_id as string).slice(-4)}`, avatar_url: profiles.get(r.user_id as string)?.avatarUrl }));
   res.json(enriched);
 });
 
@@ -154,8 +174,8 @@ statsRouter.get('/achievements/leaderboard', async (_req, res) => {
     totals.set(r.user_id as string, (totals.get(r.user_id as string) ?? 0) + xp);
   });
   const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
-  const names = await resolveNames(sorted.map(([uid]) => uid));
-  res.json(sorted.map(([user_id, xp]) => ({ user_id, achievement_xp: xp, display_name: names.get(user_id) ?? `…${user_id.slice(-4)}` })));
+  const profiles = await resolveProfiles(sorted.map(([uid]) => uid));
+  res.json(sorted.map(([user_id, xp]) => ({ user_id, achievement_xp: xp, display_name: profiles.get(user_id)?.name ?? `…${user_id.slice(-4)}`, avatar_url: profiles.get(user_id)?.avatarUrl })));
 });
 
 // GET /api/stats/leaderboard/reactions?period=today|week|all
@@ -168,8 +188,8 @@ statsRouter.get('/leaderboard/reactions', async (req, res) => {
   const agg = new Map<string, number>();
   (data ?? []).forEach(r => agg.set(r.user_id as string, (agg.get(r.user_id as string) ?? 0) + 1));
   const sorted = [...agg.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
-  const names = await resolveNames(sorted.map(([uid]) => uid));
-  res.json(sorted.map(([user_id, count]) => ({ user_id, count, display_name: names.get(user_id) ?? `…${user_id.slice(-4)}` })));
+  const profiles = await resolveProfiles(sorted.map(([uid]) => uid));
+  res.json(sorted.map(([user_id, count]) => ({ user_id, count, display_name: profiles.get(user_id)?.name ?? `…${user_id.slice(-4)}`, avatar_url: profiles.get(user_id)?.avatarUrl })));
 });
 
 // GET /api/stats/tiers/distribution
@@ -200,6 +220,26 @@ statsRouter.get('/activity/score', async (_req, res) => {
   const voiceMins = (voice.data ?? []).reduce((a, r) => a + ((r.duration_seconds as number) ?? 0), 0) / 60;
   const score = Math.round((msgs.count ?? 0) * 1 + voiceMins * 2 + (rxn.count ?? 0) * 0.5 + (quests.count ?? 0) * 10);
   res.json({ score, breakdown: { messages: msgs.count ?? 0, voice_minutes: Math.round(voiceMins), reactions: rxn.count ?? 0, quests_completed: quests.count ?? 0 } });
+});
+
+// GET /api/stats/members — all known members with profiles + current stats
+statsRouter.get('/members', async (_req, res) => {
+  const [profilesRes, pointsRes, streaksRes] = await Promise.all([
+    supabase.from('user_profiles').select('user_id, display_name, username, avatar_hash').eq('guild_id', G),
+    supabase.from('user_points').select('user_id, total_earned, points').eq('guild_id', G),
+    supabase.from('daily_streaks').select('user_id, streak_count').eq('guild_id', G),
+  ]);
+  const pointsMap  = new Map((pointsRes.data ?? []).map(p => [p.user_id as string, p]));
+  const streakMap  = new Map((streaksRes.data ?? []).map(s => [s.user_id as string, s.streak_count as number]));
+  const members = (profilesRes.data ?? []).map(p => ({
+    user_id:      p.user_id,
+    display_name: p.display_name ?? p.username ?? `…${(p.user_id as string).slice(-4)}`,
+    avatar_url:   buildAvatarUrl(p.user_id as string, p.avatar_hash as string | null),
+    total_earned: pointsMap.get(p.user_id as string)?.total_earned ?? 0,
+    points:       pointsMap.get(p.user_id as string)?.points ?? 0,
+    streak:       streakMap.get(p.user_id as string) ?? 0,
+  })).sort((a, b) => (b.total_earned as number) - (a.total_earned as number));
+  res.json(members);
 });
 
 // GET /api/stats/activity/heatmap?userId=xxx
