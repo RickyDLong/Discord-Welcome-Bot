@@ -345,11 +345,10 @@ function Avatar({ url, name, size = 28 }: { url?: string; name: string; size?: n
 function LBRow({ rank, label, value, isFirst, avatarUrl }: { rank: number; label: string; value: string; isFirst: boolean; avatarUrl?: string }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
+      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
       borderBottom: '1px solid var(--border)',
       background: isFirst ? 'var(--primary-lo)' : 'transparent',
       borderRadius: isFirst ? 6 : 0,
-      paddingLeft: isFirst ? 10 : 0,
     }}>
       <span style={{
         width: 22, fontSize: isFirst ? 15 : 11,
