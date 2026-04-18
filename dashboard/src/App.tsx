@@ -320,7 +320,8 @@ function Overview() {
 function Avatar({ url, name, size = 28 }: { url?: string; name: string; size?: number }) {
   const [err, setErr] = useState(false)
   const hue = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % 360
-  const initials = name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 2).toUpperCase() || '?'
+  const cleaned = name.replace(/^[^a-zA-Z0-9]+/, '').replace(/[^a-zA-Z0-9]/g, '')
+  const initials = cleaned.length >= 2 ? cleaned.slice(0, 2).toUpperCase() : cleaned.slice(0, 1).toUpperCase() || '?'
   if (!url || err) {
     return (
       <div style={{
