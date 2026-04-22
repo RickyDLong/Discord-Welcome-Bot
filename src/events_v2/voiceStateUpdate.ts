@@ -4,6 +4,7 @@ import { awardPoints } from '../points/engine';
 import { checkAndUpdateStreak } from '../points/streaks';
 import { checkVoiceAchievements } from '../achievements/engine';
 import { updateQuestProgress } from '../quests/dailyQuestEngine';
+import { addCoins, COINS_PER_VOICE_5MIN } from '../economy/engine';
 
 export const voiceSessions = new Map<string, { channelId: string; joinedAt: Date }>();
 // Alias used by dashboard/embed.ts
@@ -34,10 +35,17 @@ async function closeSession(
     // Quest progress: award voice minutes
     await updateQuestProgress(guildId, userId, 'voice_minutes', minutes, client);
 
-    const pts = Math.floor(duration / 300) * 2;
+    const fiveMinBlocks = Math.floor(duration / 300);
+    const pts = fiveMinBlocks * 2;
     if (pts > 0) {
       await awardPoints(guildId, userId, pts, 'voice_time');
       await checkAndUpdateStreak(guildId, userId);
+    }
+
+    // Economy: 5 coins per 5-minute block in voice
+    const coins = fiveMinBlocks * COINS_PER_VOICE_5MIN;
+    if (coins > 0) {
+      void addCoins(guildId, userId, coins, 'voice', { duration_seconds: duration, blocks: fiveMinBlocks });
     }
 
     await checkVoiceAchievements(guildId, userId, client);

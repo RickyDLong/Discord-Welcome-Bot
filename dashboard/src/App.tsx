@@ -41,8 +41,10 @@ interface AchievementEntry {
 }
 interface AchievementXP { user_id: string; achievement_xp: number; display_name?: string; avatar_url?: string }
 interface MemberEntry { user_id: string; display_name: string; avatar_url: string; total_earned: number; points: number; streak: number }
+interface EconomyEntry { user_id: string; balance: number; total_earned: number; total_spent: number; display_name?: string; avatar_url?: string }
+interface EconomyOverview { totalSupply: number; totalEarned: number; totalSpent: number; totalTransactions: number; activeUsers: number }
 type Period = 'today' | 'week' | 'all'
-type Section = 'overview' | 'leaderboards' | 'voice' | 'growth' | 'heatmap' | 'achievements' | 'members'
+type Section = 'overview' | 'leaderboards' | 'voice' | 'growth' | 'heatmap' | 'achievements' | 'members' | 'economy'
 
 // ─── API HELPERS ─────────────────────────────────────────────────────────────
 async function apiFetch<T>(path: string): Promise<T> {
@@ -901,11 +903,95 @@ function Members() {
   )
 }
 
+// ─── ECONOMY ─────────────────────────────────────────────────────────────────
+function Economy() {
+  const leaderboard = useData<EconomyEntry[]>(() => apiFetch('/api/stats/economy/leaderboard'))
+  const overview    = useData<EconomyOverview>(() => apiFetch('/api/stats/economy/overview'))
+
+  const ov = overview.data
+  const fmt = (n: number) => n.toLocaleString()
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <SectionHeader title="Economy" sub="Server coin supply, earnings, and richest members" />
+
+      {/* Overview stat row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+        <StatCard label="Coins in Circulation" value={ov ? fmt(ov.totalSupply) : '—'}    icon="🪙" accent="#f59e0b" />
+        <StatCard label="Total Ever Earned"     value={ov ? fmt(ov.totalEarned) : '—'}   icon="📈" accent="var(--green)" />
+        <StatCard label="Total Spent"           value={ov ? fmt(ov.totalSpent) : '—'}    icon="🛍️" accent="#8b5cf6" />
+        <StatCard label="Transactions"          value={ov ? fmt(ov.totalTransactions) : '—'} icon="📋" accent="var(--blue)" />
+        <StatCard label="Active Wallets"        value={ov ? fmt(ov.activeUsers) : '—'}   icon="👛" accent="var(--primary)" />
+      </div>
+
+      {/* Richest leaderboard */}
+      <Card>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <span style={{ fontSize: 16 }}>💰</span>
+          <span style={{ fontWeight: 600, fontSize: 14 }}>Richest Members</span>
+        </div>
+        {leaderboard.loading ? (
+          Array.from({ length: 5 }).map((_, i) => <div key={i} style={{ marginBottom: 10 }}><Skeleton /></div>)
+        ) : (leaderboard.data ?? []).length === 0 ? (
+          <p style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>
+            No economy data yet — members earn coins by chatting, joining voice, and completing quests.
+          </p>
+        ) : (
+          (leaderboard.data ?? []).map((r, i) => (
+            <div key={r.user_id} style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+              borderBottom: '1px solid var(--border)',
+              background: i === 0 ? 'var(--primary-lo)' : 'transparent',
+              borderRadius: i === 0 ? 6 : 0,
+            }}>
+              <span style={{ width: 22, fontSize: i < 3 ? 15 : 11, fontFamily: 'var(--mono)', fontWeight: 700, flexShrink: 0, textAlign: 'center', color: i === 0 ? 'var(--gold)' : 'var(--text-3)' }}>
+                {medal(i)}
+              </span>
+              <Avatar url={r.avatar_url} name={r.display_name ?? r.user_id} size={26} />
+              <span style={{ flex: 1, fontSize: 13, fontWeight: i === 0 ? 600 : 400, color: i === 0 ? 'var(--text)' : 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {r.display_name ?? `…${r.user_id.slice(-4)}`}
+              </span>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontFamily: 'var(--mono)', fontSize: 13, fontWeight: 700, color: i === 0 ? '#f59e0b' : 'var(--text-2)' }}>
+                  {fmt(r.balance)} 🪙
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 1 }}>
+                  {fmt(r.total_earned)} earned · {fmt(r.total_spent)} spent
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </Card>
+
+      {/* Earn guide */}
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>💡 How to Earn Coins</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+          {[
+            { icon: '💬', label: 'Send a message',       value: '2 coins (1/min)' },
+            { icon: '🎙️', label: 'Voice time',            value: '5 coins / 5 min' },
+            { icon: '🎯', label: 'Complete daily quest',  value: '25 – 75 coins' },
+            { icon: '🎁', label: 'Daily /claim',          value: '100 coins / 24h' },
+          ].map(e => (
+            <div key={e.label} style={{ padding: '10px 12px', background: 'var(--elevated)', borderRadius: 6 }}>
+              <div style={{ fontSize: 18, marginBottom: 4 }}>{e.icon}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{e.label}</div>
+              <div style={{ fontSize: 11, color: '#f59e0b', fontFamily: 'var(--mono)', marginTop: 2 }}>{e.value}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
 // ─── NAV ─────────────────────────────────────────────────────────────────────
 const SECTIONS: { id: Section; label: string; icon: string }[] = [
   { id: 'overview',      label: 'Overview',     icon: '📊' },
   { id: 'leaderboards',  label: 'Leaderboards', icon: '🏆' },
   { id: 'achievements',  label: 'Achievements', icon: '🏅' },
+  { id: 'economy',       label: 'Economy',      icon: '🪙' },
   { id: 'members',       label: 'Members',      icon: '👥' },
   { id: 'voice',         label: 'Live Voice',   icon: '🔊' },
   { id: 'growth',        label: 'Growth',       icon: '📈' },
@@ -994,6 +1080,7 @@ export default function App() {
     overview:     <Overview key={`ov-${refreshKey}`} />,
     leaderboards: <Leaderboards key={`lb-${refreshKey}`} />,
     achievements: <Achievements key={`ac-${refreshKey}`} />,
+    economy:      <Economy key={`ec-${refreshKey}`} />,
     members:      <Members key={`mb-${refreshKey}`} />,
     voice:        <LiveVoice key={`lv-${refreshKey}`} />,
     growth:       <MemberGrowth key={`mg-${refreshKey}`} />,

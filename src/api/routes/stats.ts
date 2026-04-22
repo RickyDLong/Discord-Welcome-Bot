@@ -274,3 +274,33 @@ statsRouter.get('/activity/heatmap', async (req, res) => {
   });
   res.json(Object.fromEntries(counts));
 });
+
+// GET /api/stats/economy/leaderboard — richest members with avatars
+statsRouter.get('/economy/leaderboard', async (_req, res) => {
+  const { data } = await supabase
+    .from('server_economy')
+    .select('user_id, balance, total_earned, total_spent')
+    .eq('guild_id', G)
+    .order('balance', { ascending: false })
+    .limit(10);
+  const profiles = await resolveProfiles((data ?? []).map(r => r.user_id as string));
+  const enriched = (data ?? []).map(r => ({
+    ...r,
+    display_name: profiles.get(r.user_id as string)?.name ?? `…${(r.user_id as string).slice(-4)}`,
+    avatar_url:   profiles.get(r.user_id as string)?.avatarUrl,
+  }));
+  res.json(enriched);
+});
+
+// GET /api/stats/economy/overview — totals for dashboard stats
+statsRouter.get('/economy/overview', async (_req, res) => {
+  const [totals, txCount] = await Promise.all([
+    supabase.from('server_economy').select('balance, total_earned, total_spent').eq('guild_id', G),
+    supabase.from('economy_transactions').select('id', { count: 'exact', head: true }).eq('guild_id', G),
+  ]);
+  const rows = totals.data ?? [];
+  const totalSupply  = rows.reduce((a, r) => a + (r.balance as number), 0);
+  const totalEarned  = rows.reduce((a, r) => a + (r.total_earned as number), 0);
+  const totalSpent   = rows.reduce((a, r) => a + (r.total_spent as number), 0);
+  res.json({ totalSupply, totalEarned, totalSpent, totalTransactions: txCount.count ?? 0, activeUsers: rows.length });
+});

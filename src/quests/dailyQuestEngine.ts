@@ -2,6 +2,7 @@ import { Client, EmbedBuilder } from 'discord.js';
 import { supabase } from '../db/supabase';
 import { awardPoints } from '../points/engine';
 import { checkQuestAchievements, checkAndAwardAchievement } from '../achievements/engine';
+import { addCoins, COINS_PER_QUEST } from '../economy/engine';
 
 // ── Generate today's 3 quests (1 easy, 1 normal, 1 hard) ──────────────────
 export async function generateDailyQuests(guildId: string): Promise<void> {
@@ -128,6 +129,11 @@ async function onQuestComplete(
   client: Client,
 ): Promise<void> {
   await awardPoints(guildId, userId, quest.xp_reward, `daily_quest_${quest.id}`);
+
+  // Economy: bonus coins based on quest difficulty
+  const coinReward = COINS_PER_QUEST[quest.difficulty as string] ?? COINS_PER_QUEST['normal']!;
+  void addCoins(guildId, userId, coinReward, 'quest', { quest_id: quest.id, difficulty: quest.difficulty });
+
   await checkQuestAchievements(guildId, userId, client);
 
   // Check triple threat (all 3 done today)

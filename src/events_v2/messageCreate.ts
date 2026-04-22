@@ -4,6 +4,7 @@ import { awardPoints } from '../points/engine';
 import { checkAndUpdateStreak } from '../points/streaks';
 import { checkMessageAchievements, checkStreakAchievements } from '../achievements/engine';
 import { updateQuestProgress } from '../quests/dailyQuestEngine';
+import { addCoins, COINS_PER_MESSAGE } from '../economy/engine';
 
 const messageCooldown = new Map<string, number>();
 const COOLDOWN_MS = 60_000;
@@ -38,6 +39,7 @@ export async function handleMessageCreate(message: Message) {
     if (now - (messageCooldown.get(userId) ?? 0) >= COOLDOWN_MS) {
       messageCooldown.set(userId, now);
       await awardPoints(guildId, userId, 1, 'message');
+      void addCoins(guildId, userId, COINS_PER_MESSAGE, 'message');
       const newStreak = await checkAndUpdateStreak(guildId, userId);
       await checkMessageAchievements(guildId, userId, client);
       await checkStreakAchievements(guildId, userId, newStreak, client);

@@ -1,5 +1,6 @@
 import { Client, REST, Routes, SlashCommandBuilder } from 'discord.js';
 import { config } from '../config';
+import { economyCommands } from './economy';
 
 const commands = [
   new SlashCommandBuilder()
@@ -92,12 +93,14 @@ const commands = [
     ),
 ].map(cmd => cmd.toJSON());
 
+const allCommands = [...commands, ...economyCommands];
+
 export async function registerSlashCommands(client: Client): Promise<void> {
   if (!client.user) return;
   const rest = new REST().setToken(config.BOT_TOKEN);
   await rest.put(
     Routes.applicationGuildCommands(client.user.id, config.GUILD_ID),
-    { body: commands },
+    { body: allCommands },
   );
-  console.log(`✅ Registered ${commands.length} slash commands.`);
+  console.log(`✅ Registered ${allCommands.length} slash commands.`);
 }
