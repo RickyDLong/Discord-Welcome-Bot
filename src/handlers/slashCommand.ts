@@ -12,7 +12,7 @@ import {
   handleShop, handleBuy, handleAddItem, handleRemoveItem,
 } from '../commands/economy';
 
-const commandMap: Record<string, (i: ChatInputCommandInteraction) => Promise<void>> = {
+const commandMap: Record<string, (i: ChatInputCommandInteraction) => Promise<unknown>> = {
   // Existing
   points:       handlePointsCommand,
   leaderboard:  handleLeaderboardCommand,
