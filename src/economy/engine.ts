@@ -1,4 +1,5 @@
 import { supabase } from '../db/supabase';
+import { getActiveBuff, consumeBuff } from './buffs';
 
 export interface Balance {
   balance:      number;
@@ -28,6 +29,15 @@ export async function addCoins(
   metadata?: Record<string, unknown>,
 ): Promise<number> {
   if (amount <= 0) throw new Error('amount must be positive');
+
+  // Apply passive-earn coin boosts (only for message / voice earnings)
+  if (reason === 'message') {
+    const buff = await getActiveBuff(guildId, userId, 'coin_boost_msg');
+    if (buff) amount = Math.floor(amount * buff.multiplier);
+  } else if (reason === 'voice') {
+    const buff = await getActiveBuff(guildId, userId, 'coin_boost_voice');
+    if (buff) amount = Math.floor(amount * buff.multiplier);
+  }
 
   const { data, error } = await supabase.rpc('economy_add_coins', {
     p_guild_id: guildId,
@@ -87,7 +97,7 @@ export const DAILY_COOLDOWN = 24 * 60 * 60 * 1000; // ms
 export async function claimDaily(
   guildId: string,
   userId:  string,
-): Promise<{ success: boolean; msRemaining?: number; newBalance?: number }> {
+): Promise<{ success: boolean; msRemaining?: number; newBalance?: number; doubled?: boolean }> {
   const bal = await getBalance(guildId, userId);
   if (bal.last_daily) {
     const elapsed = Date.now() - new Date(bal.last_daily).getTime();
@@ -103,8 +113,16 @@ export async function claimDaily(
     last_daily: new Date().toISOString(),
   }, { onConflict: 'guild_id,user_id' });
 
-  const newBalance = await addCoins(guildId, userId, DAILY_AMOUNT, 'daily');
-  return { success: true, newBalance };
+  // Check for Daily Double buff (2x payout, one-shot)
+  let claimAmount = DAILY_AMOUNT;
+  const dailyDouble = await getActiveBuff(guildId, userId, 'daily_double');
+  if (dailyDouble) {
+    claimAmount = DAILY_AMOUNT * 2;
+    await consumeBuff(dailyDouble.id);
+  }
+
+  const newBalance = await addCoins(guildId, userId, claimAmount, 'daily');
+  return { success: true, newBalance, doubled: !!dailyDouble };
 }
 
 // ── Coin rates for passive earning ────────────────────────────────────────

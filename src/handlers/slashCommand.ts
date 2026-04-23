@@ -10,6 +10,7 @@ import {
   handleBalance, handleDaily as handleClaim, handleGive,
   handleCoinflip, handleSlots, handleRichest,
   handleShop, handleBuy, handleAddItem, handleRemoveItem,
+  handleBoosts, handleReroll,
 } from '../commands/economy';
 
 const commandMap: Record<string, (i: ChatInputCommandInteraction) => Promise<unknown>> = {
@@ -32,6 +33,8 @@ const commandMap: Record<string, (i: ChatInputCommandInteraction) => Promise<unk
   buy:          handleBuy,
   additem:      handleAddItem,
   removeitem:   handleRemoveItem,
+  boosts:       handleBoosts,
+  reroll:       handleReroll,
 };
 
 export async function handleSlashCommand(interaction: ChatInputCommandInteraction): Promise<void> {

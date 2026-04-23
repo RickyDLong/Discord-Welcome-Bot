@@ -1,10 +1,18 @@
 import { supabase } from '../db/supabase';
 import { checkTierProgression } from './tiers';
+import { getActiveBuff } from '../economy/buffs';
 
 export async function awardPoints(
   userId: string, guildId: string, amount: number, reason: string,
 ): Promise<void> {
   if (amount <= 0) return;
+
+  // Apply XP Surge boost if active (skip passive-earn reasons to avoid double-dipping)
+  const boostable = !['daily_quest', 'daily'].includes(reason.split('_')[0] ?? reason);
+  if (boostable) {
+    const xpBuff = await getActiveBuff(guildId, userId, 'xp_boost');
+    if (xpBuff) amount = Math.floor(amount * xpBuff.multiplier);
+  }
 
   // Upsert user point balance
   const { data: existing } = await supabase
