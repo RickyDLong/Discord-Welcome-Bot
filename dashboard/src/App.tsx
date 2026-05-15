@@ -13,7 +13,7 @@ const GuildContext = createContext<string>('')
 // Hook: returns an apiFetch wrapper scoped to the current guild
 function useGf() {
   const guildId = useContext(GuildContext)
-  return useCallback(<T>(path: string): Promise<T> => {
+  return useCallback(<T,>(path: string): Promise<T> => {
     const sep = path.includes('?') ? '&' : '?'
     return apiFetch<T>(`${path}${sep}guild_id=${guildId}`)
   }, [guildId])
@@ -1216,37 +1216,4 @@ export default function App() {
       <main style={{ flex: 1, overflow: 'auto', padding: 28 }}>
         {/* Top bar */}
         <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          marginBottom: 28, paddingBottom: 20,
-          borderBottom: '1px solid var(--border)',
-        }}>
-          <div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.03em' }}>
-              {SECTIONS.find(s => s.id === section)?.icon}{' '}
-              {SECTIONS.find(s => s.id === section)?.label}
-            </h1>
-            <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            </p>
-          </div>
-          {!online && online !== null && (
-            <div style={{
-              padding: '8px 14px', background: 'var(--red)15',
-              border: '1px solid var(--red)33', borderRadius: 6,
-              fontSize: 12, color: 'var(--red)', fontWeight: 600,
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}>
-              ⚠️ API offline — showing cached data
-            </div>
-          )}
-        </div>
-
-        {/* Section content */}
-        <div style={{ maxWidth: 1100 }}>
-          {sectionEl}
-        </div>
-      </main>
-    </div>
-    </GuildContext.Provider>
-  )
-}
+          display: 'flex', alignItems: 'center', justifyContent: 'spa
