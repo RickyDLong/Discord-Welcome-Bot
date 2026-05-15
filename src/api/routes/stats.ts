@@ -93,10 +93,13 @@ statsRouter.get('/leaderboard/streaks', async (req, res) => {
 // GET /api/stats/voice/live
 statsRouter.get('/voice/live', async (req, res) => {
   const G = gid(req);
-  const { data } = await supabase.from('voice_channel_snapshots').select('*').eq('guild_id', G).order('snapshot_at', { ascending: false }).limit(20);
+  // Only consider snapshots from the last 5 minutes (snapshot interval is 2 min)
+  const cutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  const { data } = await supabase.from('voice_channel_snapshots').select('*').eq('guild_id', G).gte('snapshot_at', cutoff).order('snapshot_at', { ascending: false }).limit(50);
   const latest = new Map<string, any>();
   (data ?? []).forEach(r => { if (!latest.has(r.channel_id)) latest.set(r.channel_id, r); });
-  const channels = [...latest.values()];
+  // Only channels that actually have members right now
+  const channels = [...latest.values()].filter(ch => (ch.member_count ?? 0) > 0);
   const allUserIds = [...new Set(
     channels.flatMap(ch => ((ch.members as any[]) ?? []).map((m: any) => m.user_id as string))
   )];
@@ -260,8 +263,8 @@ statsRouter.get('/activity/heatmap', async (req, res) => {
   const G = gid(req);
   const userId = req.query['userId'] as string;
   const since  = new Date(Date.now() - 365 * 86_400_000).toISOString();
-  const query  = supabase.from('message_events').select('created_at').eq('guild_id', G).gte('created_at', since);
-  if (userId) query.eq('user_id', userId);
+  let query = supabase.from('message_events').select('created_at').eq('guild_id', G).gte('created_at', since);
+  if (userId) query = query.eq('user_id', userId);
   const { data } = await query;
   const counts = new Map<string, number>();
   (data ?? []).forEach(r => {
