@@ -1,17 +1,17 @@
 import { Client, EmbedBuilder, TextChannel } from 'discord.js';
 
-export function buildAnnouncementEmbed(): EmbedBuilder {
+export function buildAnnouncementEmbed(guildName: string): EmbedBuilder {
   return new EmbedBuilder()
     .setColor(0x7c3aed)
-    .setTitle('⚡  Archix — Updated')
+    .setTitle(`⚡  ${guildName} — Bot Updated`)
     .setDescription(
-      'This server just got even smarter.\n\n' +
-      '**Archix** is a custom community intelligence system built from the ground up by **Valrok** — ' +
-      'designed to turn passive server membership into an active, rewarding experience.'
+      `This server just got a serious upgrade.\n\n` +
+      `This is a custom community intelligence system built from the ground up — ` +
+      `designed to turn passive server membership into an active, rewarding experience.`
     )
     .addFields(
       {
-        name: '🧠 What Archix does',
+        name: '🧠 What the bot does',
         value: [
           '**Tracks everything** — messages, voice time, reactions, and daily streaks all count toward your XP',
           '**Ranks you automatically** — climb from Member all the way to Legend based on your total contribution',
@@ -40,7 +40,7 @@ export function buildAnnouncementEmbed(): EmbedBuilder {
           '⚡ **XP Surge** — 2× XP for 24 hours',
           '💬 **Coin Magnet** — 2× coins from messages for 24 hours',
           '🎙️ **Voice Bonus** — 2× coins from voice for 24 hours',
-          '🌟 **Daily Double** — next `/claim` pays double',
+          '🌟 **Daily Double** — next daily claim pays double',
           '🍀 **Lucky Charm** — guaranteed `/coinflip` win',
           '🎲 **House Edge** — free reroll on a losing flip',
           '🔄 **Quest Reroll** — swap one of today\'s daily quests',
@@ -52,17 +52,14 @@ export function buildAnnouncementEmbed(): EmbedBuilder {
         value: [
           '`/profile` — your tier, XP, streak, and coin balance',
           '`/leaderboard` — see who\'s running the server',
-          '`/quest` — view today\'s daily quests',
-          '`/balance` — check your Coins',
-          '`/claim` — grab your daily Coin bonus',
+          '`/daily` — view today\'s daily quests',
+          '`/economy balance` — check your Coins',
+          '`/economy coinflip` — bet Coins, 50/50',
+          '`/economy slots` — spin the reels',
+          '`/economy give` — send Coins to another member',
           '`/shop` — browse items available for purchase',
-          '`/buy <item>` — purchase a shop item',
-          '`/boosts` — see your active boosts and one-shot items',
-          '`/reroll` — swap one of today\'s daily quests (requires Quest Reroll)',
-          '`/coinflip` — bet Coins, 50/50',
-          '`/slots` — spin the reels',
-          '`/give` — send Coins to another member',
-          '`/richest` — the top 10 coin holders',
+          '`/boosts` — see your active boosts',
+          '`/achievements` — your unlocked achievements',
         ].join('\n'),
         inline: false,
       },
@@ -72,7 +69,7 @@ export function buildAnnouncementEmbed(): EmbedBuilder {
         inline: false,
       },
     )
-    .setFooter({ text: 'Built by Valrok  ·  Archix Digital' })
+    .setFooter({ text: `${guildName}  ·  powered by Archix` })
     .setTimestamp();
 }
 
@@ -83,7 +80,8 @@ export async function postAnnouncementEmbed(client: Client, channelId: string): 
     return;
   }
 
-  const embed = buildAnnouncementEmbed();
+  const guildName = channel.guild?.name ?? 'This Server';
+  const embed = buildAnnouncementEmbed(guildName);
   await channel.send({ embeds: [embed] });
-  console.log('[Announcement] Posted Archix intro announcement');
+  console.log(`[Announcement] Posted announcement in ${guildName}`);
 }

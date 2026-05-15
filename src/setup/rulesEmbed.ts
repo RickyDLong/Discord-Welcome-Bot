@@ -1,13 +1,12 @@
 import { Client, EmbedBuilder, TextChannel } from 'discord.js';
 
-export function buildRulesEmbed(): EmbedBuilder[] {
-  // ── Embed 1: Server Rules ─────────────────────────────────────────────────
+export function buildRulesEmbed(guildName: string): EmbedBuilder[] {
   const rulesEmbed = new EmbedBuilder()
     .setColor(0x7c3aed)
     .setTitle('📜  Server Rules')
     .setDescription(
-      'Archix is a space for builders and gamers to connect, collaborate, and grow. ' +
-      'Keep it that way by following these rules. Violations may result in a warning, mute, or ban.\n\u200b'
+      `${guildName} is a community space. Keep it that way by following these rules. ` +
+      `Violations may result in a warning, mute, or ban.\n​`
     )
     .addFields(
       {
@@ -48,12 +47,11 @@ export function buildRulesEmbed(): EmbedBuilder[] {
     )
     .setFooter({ text: 'By being here, you agree to these rules.' });
 
-  // ── Embed 2: Points & XP System ───────────────────────────────────────────
   const pointsEmbed = new EmbedBuilder()
     .setColor(0x7c3aed)
     .setTitle('💎  Points & XP System')
     .setDescription(
-      'Everything you do in Archix earns XP. The more active you are, the higher you climb.\n\u200b'
+      `Everything you do in ${guildName} earns XP. The more active you are, the higher you climb.\n​`
     )
     .addFields(
       {
@@ -85,17 +83,17 @@ export function buildRulesEmbed(): EmbedBuilder[] {
           '`/profile` — see your tier, XP, and streak',
           '`/points` — quick XP balance check',
           '`/leaderboard` — see who\'s on top',
-          '`/quest list` — browse active quests',
+          '`/daily` — check today\'s quest progress',
         ].join('\n'),
         inline: true,
       },
       {
-        name: '\u200b',
+        name: '​',
         value: 'XP is permanent — it never resets. Your tier reflects your total lifetime contribution.',
         inline: false,
       },
     )
-    .setFooter({ text: 'Archix Digital  ·  grind smart' })
+    .setFooter({ text: `${guildName}  ·  grind smart` })
     .setTimestamp();
 
   return [rulesEmbed, pointsEmbed];
@@ -108,9 +106,9 @@ export async function postRulesEmbed(client: Client, channelId: string): Promise
     return;
   }
 
-  const embeds = buildRulesEmbed();
+  const guildName = channel.guild?.name ?? 'This Server';
+  const embeds = buildRulesEmbed(guildName);
 
-  // Look for an existing rules post from the bot to edit instead of re-posting
   const messages = await channel.messages.fetch({ limit: 20 });
   const existing = messages.find(
     m => m.author.id === client.user?.id && m.embeds[0]?.title?.includes('Server Rules')
