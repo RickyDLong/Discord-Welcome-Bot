@@ -48,7 +48,7 @@ type Section = 'overview' | 'leaderboards' | 'voice' | 'growth' | 'heatmap' | 'a
 
 // ─── API HELPERS ─────────────────────────────────────────────────────────────
 async function apiFetch<T>(path: string): Promise<T> {
-  const r = await fetch(`${API}${path}`)
+  const r = await fetch(`${API}${path}`, { headers: { 'ngrok-skip-browser-warning': 'true' } })
   if (!r.ok) throw new Error(`${r.status}`)
   return r.json()
 }
@@ -1064,7 +1064,7 @@ export default function App() {
 
   const checkHealth = useCallback(async () => {
     try {
-      const r = await fetch(`${API}/health`)
+      const r = await fetch(`${API}/health`, { headers: { 'ngrok-skip-browser-warning': 'true' } })
       setOnline(r.ok)
     } catch { setOnline(false) }
   }, [])
