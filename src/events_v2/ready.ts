@@ -5,30 +5,28 @@ import { startVoiceSnapshotScheduler } from '../points/voiceSnapshot';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { supabase } from '../db/supabase';
-import { config } from '../config';
 
 async function seedMemberProfiles(client: Client): Promise<void> {
-  try {
-    const guild = client.guilds.cache.get(config.GUILD_ID);
-    if (!guild) return;
-    const members = await guild.members.fetch();
-    const rows = members
-      .filter(m => !m.user.bot)
-      .map(m => ({
-        guild_id:     guild.id,
-        user_id:      m.id,
-        username:     m.user.username,
-        display_name: m.displayName,
-        avatar_hash:  m.user.avatar,
-        updated_at:   new Date().toISOString(),
-      }));
-    // Upsert in batches of 100 to avoid payload limits
-    for (let i = 0; i < rows.length; i += 100) {
-      await supabase.from('user_profiles').upsert(rows.slice(i, i + 100), { onConflict: 'guild_id,user_id' });
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      const members = await guild.members.fetch();
+      const rows = members
+        .filter(m => !m.user.bot)
+        .map(m => ({
+          guild_id:     guild.id,
+          user_id:      m.id,
+          username:     m.user.username,
+          display_name: m.displayName,
+          avatar_hash:  m.user.avatar,
+          updated_at:   new Date().toISOString(),
+        }));
+      for (let i = 0; i < rows.length; i += 100) {
+        await supabase.from('user_profiles').upsert(rows.slice(i, i + 100), { onConflict: 'guild_id,user_id' });
+      }
+      console.log(`[Ready] Seeded ${rows.length} profile(s) for guild ${guild.id} (${guild.name})`);
+    } catch (e) {
+      console.warn(`[Ready] Profile seed failed for ${guild.id}:`, (e as Error).message);
     }
-    console.log(`[Ready] Seeded profiles for ${rows.length} member(s).`);
-  } catch (e) {
-    console.warn('[Ready] Profile seed failed:', (e as Error).message);
   }
 }
 

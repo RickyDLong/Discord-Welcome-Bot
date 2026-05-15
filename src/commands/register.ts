@@ -98,9 +98,11 @@ const allCommands = [...commands, ...economyCommands];
 export async function registerSlashCommands(client: Client): Promise<void> {
   if (!client.user) return;
   const rest = new REST().setToken(config.BOT_TOKEN);
-  await rest.put(
-    Routes.applicationGuildCommands(client.user.id, config.GUILD_ID),
-    { body: allCommands },
-  );
-  console.log(`✅ Registered ${allCommands.length} slash commands.`);
+  for (const guildId of client.guilds.cache.keys()) {
+    await rest.put(
+      Routes.applicationGuildCommands(client.user.id, guildId),
+      { body: allCommands },
+    );
+    console.log(`✅ Registered ${allCommands.length} slash commands in guild ${guildId}`);
+  }
 }

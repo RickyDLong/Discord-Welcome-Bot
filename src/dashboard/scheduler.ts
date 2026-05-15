@@ -1,7 +1,19 @@
 import { Client } from 'discord.js';
 import { updateDashboard } from './embed';
 import { generateDailyQuests } from '../quests/dailyQuestEngine';
-import { config } from '../config';
+
+function allGuildIds(client: Client): string[] {
+  return [...client.guilds.cache.keys()];
+}
+
+/** Generate quests for every guild the bot is in */
+async function generateQuestsAllGuilds(client: Client): Promise<void> {
+  for (const guildId of allGuildIds(client)) {
+    await generateDailyQuests(guildId).catch(e =>
+      console.error(`[Scheduler] Quest generation failed for ${guildId}:`, e),
+    );
+  }
+}
 
 /** Schedule daily quest generation at the next UTC midnight, then every 24h */
 function scheduleMidnightQuests(client: Client): void {
@@ -17,17 +29,14 @@ function scheduleMidnightQuests(client: Client): void {
   console.log(`📋 Daily quests will regenerate in ${Math.round(msUntilMidnight / 60000)} min (next UTC midnight)`);
 
   setTimeout(() => {
-    generateDailyQuests(config.GUILD_ID).catch(console.error);
-    // Then repeat every 24h
-    setInterval(() => {
-      generateDailyQuests(config.GUILD_ID).catch(console.error);
-    }, 24 * 60 * 60 * 1000);
+    generateQuestsAllGuilds(client).catch(console.error);
+    setInterval(() => generateQuestsAllGuilds(client).catch(console.error), 24 * 60 * 60 * 1000);
   }, msUntilMidnight);
 }
 
 export function startDashboardScheduler(client: Client): void {
-  // Generate today's quests immediately on startup (idempotent — skips if already done)
-  generateDailyQuests(config.GUILD_ID).catch(console.error);
+  // Generate today's quests on startup for every guild (idempotent — skips if already done)
+  generateQuestsAllGuilds(client).catch(console.error);
 
   // Schedule midnight refresh
   scheduleMidnightQuests(client);
