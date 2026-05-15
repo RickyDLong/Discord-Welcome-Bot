@@ -116,6 +116,23 @@ export async function updateDashboard(client: Client): Promise<void> {
       updated_at:   new Date().toISOString(),
     }, { onConflict: 'guild_id' });
 
+    // Update guild_stats for every OTHER guild the bot is in
+    for (const g of client.guilds.cache.values()) {
+      if (g.id === config.GUILD_ID) continue;
+      try {
+        const members = await g.members.fetch();
+        const online  = members.filter(m => m.presence?.status === 'online').size;
+        await supabase.from('guild_stats').upsert({
+          guild_id:     g.id,
+          member_count: members.size,
+          online_count: online,
+          updated_at:   new Date().toISOString(),
+        }, { onConflict: 'guild_id' });
+      } catch (e) {
+        console.error(`[Dashboard] guild_stats update failed for ${g.id}:`, e);
+      }
+    }
+
     // Voice
     const voiceAgg = new Map<string, number>();
     (voiceTop.data ?? []).forEach(r =>

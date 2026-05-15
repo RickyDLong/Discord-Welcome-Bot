@@ -1123,8 +1123,13 @@ export default function App() {
     heatmap:      <ActivityHeatmap key={`hm-${sectionKey}`} />,
   }[section]
 
-  const guildLabel = (g: GuildEntry, i: number) =>
-    i === 0 ? `Archix (${(g.member_count ?? 0).toLocaleString()})` : `Server 2 (${(g.member_count ?? 0).toLocaleString()})`
+  const GUILD_NAMES: Record<string, string> = {
+    '692162728424505376': "Abain's Discord",
+  }
+  const guildLabel = (g: GuildEntry, i: number) => {
+    const name = GUILD_NAMES[g.guild_id] ?? (i === 0 ? 'Archix' : `Server ${i + 1}`)
+    return `${name} (${(g.member_count ?? 0).toLocaleString()})`
+  }
 
   return (
     <GuildContext.Provider value={guildId}>
