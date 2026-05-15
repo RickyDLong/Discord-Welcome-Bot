@@ -4,7 +4,7 @@ import {
 } from 'recharts'
 
 // ─── CONFIG ─────────────────────────────────────────────────────────────────
-const API = 'https://discord-welcome-bot-production-4559.up.railway.app'
+const API = 'https://pihole.tailb24ccl.ts.net''
 const REFRESH_MS = 30_000
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
