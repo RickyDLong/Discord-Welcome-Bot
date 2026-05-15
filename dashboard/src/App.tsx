@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, createContext, useContext } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts'
@@ -6,6 +6,18 @@ import {
 // ─── CONFIG ─────────────────────────────────────────────────────────────────
 const API = 'https://simple-motive-rockstar.ngrok-free.dev'
 const REFRESH_MS = 30_000
+
+// ─── GUILD CONTEXT ───────────────────────────────────────────────────────────
+const GuildContext = createContext<string>('')
+
+// Hook: returns an apiFetch wrapper scoped to the current guild
+function useGf() {
+  const guildId = useContext(GuildContext)
+  return useCallback(<T>(path: string): Promise<T> => {
+    const sep = path.includes('?') ? '&' : '?'
+    return apiFetch<T>(`${path}${sep}guild_id=${guildId}`)
+  }, [guildId])
+}
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
 interface Overview {
@@ -45,6 +57,7 @@ interface EconomyEntry { user_id: string; balance: number; total_earned: number;
 interface EconomyOverview { totalSupply: number; totalEarned: number; totalSpent: number; totalTransactions: number; activeUsers: number }
 type Period = 'today' | 'week' | 'all'
 type Section = 'overview' | 'leaderboards' | 'voice' | 'growth' | 'heatmap' | 'achievements' | 'members' | 'economy'
+interface GuildEntry { guild_id: string; member_count: number | null }
 
 // ─── API HELPERS ─────────────────────────────────────────────────────────────
 async function apiFetch<T>(path: string): Promise<T> {
@@ -176,7 +189,8 @@ const TIER_CONFIG: { name: string; emoji: string; color: string }[] = [
 ]
 
 function TierDistribution() {
-  const { data, loading } = useData<TierDist>(() => apiFetch('/api/stats/tiers/distribution'))
+  const gf = useGf()
+  const { data, loading } = useData<TierDist>(() => gf('/api/stats/tiers/distribution'), [gf])
   const total = data ? Object.values(data).reduce((a, b) => a + b, 0) : 0
 
   return (
@@ -214,7 +228,8 @@ function TierDistribution() {
 }
 
 function QuestPulseCard() {
-  const { data, loading } = useData<QuestPulse>(() => apiFetch('/api/stats/quests/today'))
+  const gf = useGf()
+  const { data, loading } = useData<QuestPulse>(() => gf('/api/stats/quests/today'), [gf])
 
   const diffColor = (d: string) => ({ easy: 'var(--green)', medium: '#f59e0b', hard: '#ef4444' })[d] ?? 'var(--text-3)'
 
@@ -259,8 +274,9 @@ function QuestPulseCard() {
 
 // ─── OVERVIEW SECTION ────────────────────────────────────────────────────────
 function Overview() {
-  const { data, loading } = useData<Overview>(() => apiFetch('/api/stats/overview'))
-  const { data: scoreData, loading: scoreLoading } = useData<ActivityScore>(() => apiFetch('/api/stats/activity/score'))
+  const gf = useGf()
+  const { data, loading } = useData<Overview>(() => gf('/api/stats/overview'), [gf])
+  const { data: scoreData, loading: scoreLoading } = useData<ActivityScore>(() => gf('/api/stats/activity/score'), [gf])
 
   const cards = [
     {
@@ -410,14 +426,15 @@ function PeriodToggle({ value, onChange }: { value: Period; onChange: (p: Period
 }
 
 function Leaderboards() {
+  const gf = useGf()
   const [period, setPeriod] = useState<Period>('today')
 
-  const pts      = useData<PointsEntry[]>(() => apiFetch('/api/stats/leaderboard/points'))
-  const voice    = useData<VoiceEntry[]>(() => apiFetch(`/api/stats/leaderboard/voice?period=${period}`), [period])
-  const msgs     = useData<MsgEntry[]>(() => apiFetch(`/api/stats/leaderboard/messages?period=${period}`), [period])
-  const streaks  = useData<StreakEntry[]>(() => apiFetch('/api/stats/leaderboard/streaks'))
-  const rxn      = useData<ReactionEntry[]>(() => apiFetch(`/api/stats/leaderboard/reactions?period=${period}`), [period])
-  const achXP    = useData<AchievementXP[]>(() => apiFetch('/api/stats/achievements/leaderboard'))
+  const pts      = useData<PointsEntry[]>(() => gf('/api/stats/leaderboard/points'), [gf])
+  const voice    = useData<VoiceEntry[]>(() => gf(`/api/stats/leaderboard/voice?period=${period}`), [gf, period])
+  const msgs     = useData<MsgEntry[]>(() => gf(`/api/stats/leaderboard/messages?period=${period}`), [gf, period])
+  const streaks  = useData<StreakEntry[]>(() => gf('/api/stats/leaderboard/streaks'), [gf])
+  const rxn      = useData<ReactionEntry[]>(() => gf(`/api/stats/leaderboard/reactions?period=${period}`), [gf, period])
+  const achXP    = useData<AchievementXP[]>(() => gf('/api/stats/achievements/leaderboard'), [gf])
 
   return (
     <div>
@@ -484,7 +501,8 @@ function Leaderboards() {
 
 // ─── LIVE VOICE ───────────────────────────────────────────────────────────────
 function LiveVoice() {
-  const { data, loading } = useData<VoiceLive[]>(() => apiFetch('/api/stats/voice/live'))
+  const gf = useGf()
+  const { data, loading } = useData<VoiceLive[]>(() => gf('/api/stats/voice/live'), [gf])
 
   const active = (data ?? []).filter(c => c.member_count > 0)
 
@@ -578,10 +596,11 @@ function buildTimeline(events: MemberEvent[], days: number) {
 }
 
 function MemberGrowth() {
+  const gf = useGf()
   const [days, setDays] = useState(30)
   const { data, loading } = useData<MemberEvent[]>(
-    () => apiFetch(`/api/stats/members/timeline?days=${days}`),
-    [days]
+    () => gf(`/api/stats/members/timeline?days=${days}`),
+    [gf, days]
   )
 
   const chartData = data ? buildTimeline(data, days) : []
@@ -664,7 +683,8 @@ function MemberGrowth() {
 
 // ─── ACTIVITY HEATMAP ────────────────────────────────────────────────────────
 function ActivityHeatmap() {
-  const { data, loading } = useData<Record<string, number>>(() => apiFetch('/api/stats/activity/heatmap'))
+  const gf = useGf()
+  const { data, loading } = useData<Record<string, number>>(() => gf('/api/stats/activity/heatmap'), [gf])
 
   const weeks = 26
   const days  = weeks * 7
@@ -771,8 +791,9 @@ function ActivityHeatmap() {
 
 // ─── ACHIEVEMENTS ─────────────────────────────────────────────────────────────
 function Achievements() {
-  const recent = useData<AchievementEntry[]>(() => apiFetch('/api/stats/achievements/recent?limit=20'))
-  const top    = useData<AchievementXP[]>(() => apiFetch('/api/stats/achievements/leaderboard'))
+  const gf = useGf()
+  const recent = useData<AchievementEntry[]>(() => gf('/api/stats/achievements/recent?limit=20'), [gf])
+  const top    = useData<AchievementXP[]>(() => gf('/api/stats/achievements/leaderboard'), [gf])
 
   function timeAgo(iso: string) {
     const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
@@ -847,7 +868,8 @@ function Achievements() {
 
 // ─── MEMBERS ─────────────────────────────────────────────────────────────────
 function Members() {
-  const { data, loading } = useData<MemberEntry[]>(() => apiFetch('/api/stats/members'))
+  const gf = useGf()
+  const { data, loading } = useData<MemberEntry[]>(() => gf('/api/stats/members'), [gf])
 
   const tierForXP = (xp: number) => {
     if (xp >= 15000) return { name: 'Legend',  color: '#e74c3c', emoji: '🔴' }
@@ -905,8 +927,9 @@ function Members() {
 
 // ─── ECONOMY ─────────────────────────────────────────────────────────────────
 function Economy() {
-  const leaderboard = useData<EconomyEntry[]>(() => apiFetch('/api/stats/economy/leaderboard'))
-  const overview    = useData<EconomyOverview>(() => apiFetch('/api/stats/economy/overview'))
+  const gf = useGf()
+  const leaderboard = useData<EconomyEntry[]>(() => gf('/api/stats/economy/leaderboard'), [gf])
+  const overview    = useData<EconomyOverview>(() => gf('/api/stats/economy/overview'), [gf])
 
   const ov = overview.data
   const fmt = (n: number) => n.toLocaleString()
@@ -1058,9 +1081,19 @@ function RefreshTimer({ interval, onTick }: { interval: number; onTick: () => vo
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [section, setSection]   = useState<Section>('overview')
-  const [online, setOnline]     = useState<boolean | null>(null)
+  const [section, setSection]    = useState<Section>('overview')
+  const [online, setOnline]      = useState<boolean | null>(null)
   const [refreshKey, setRefresh] = useState(0)
+  const [guilds, setGuilds]      = useState<GuildEntry[]>([])
+  const [guildId, setGuildId]    = useState<string>('')
+
+  // Fetch available guilds once on mount
+  useEffect(() => {
+    apiFetch<GuildEntry[]>('/api/stats/guilds').then(data => {
+      setGuilds(data)
+      if (data.length > 0 && !guildId) setGuildId(data[0]!.guild_id)
+    }).catch(() => {})
+  }, [])
 
   const checkHealth = useCallback(async () => {
     try {
@@ -1076,18 +1109,25 @@ export default function App() {
     checkHealth()
   }, [checkHealth])
 
+  // Remount section on guild change OR refresh tick
+  const sectionKey = `${guildId}-${refreshKey}`
+
   const sectionEl = {
-    overview:     <Overview key={`ov-${refreshKey}`} />,
-    leaderboards: <Leaderboards key={`lb-${refreshKey}`} />,
-    achievements: <Achievements key={`ac-${refreshKey}`} />,
-    economy:      <Economy key={`ec-${refreshKey}`} />,
-    members:      <Members key={`mb-${refreshKey}`} />,
-    voice:        <LiveVoice key={`lv-${refreshKey}`} />,
-    growth:       <MemberGrowth key={`mg-${refreshKey}`} />,
-    heatmap:      <ActivityHeatmap key={`hm-${refreshKey}`} />,
+    overview:     <Overview key={`ov-${sectionKey}`} />,
+    leaderboards: <Leaderboards key={`lb-${sectionKey}`} />,
+    achievements: <Achievements key={`ac-${sectionKey}`} />,
+    economy:      <Economy key={`ec-${sectionKey}`} />,
+    members:      <Members key={`mb-${sectionKey}`} />,
+    voice:        <LiveVoice key={`lv-${sectionKey}`} />,
+    growth:       <MemberGrowth key={`mg-${sectionKey}`} />,
+    heatmap:      <ActivityHeatmap key={`hm-${sectionKey}`} />,
   }[section]
 
+  const guildLabel = (g: GuildEntry, i: number) =>
+    i === 0 ? `Archix (${(g.member_count ?? 0).toLocaleString()})` : `Server 2 (${(g.member_count ?? 0).toLocaleString()})`
+
   return (
+    <GuildContext.Provider value={guildId}>
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
 
       {/* SIDEBAR */}
@@ -1128,6 +1168,29 @@ export default function App() {
               </>
             )}
           </div>
+
+          {/* Guild selector */}
+          {guilds.length > 1 && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 6, fontWeight: 600 }}>
+                Server
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {guilds.map((g, i) => (
+                  <button key={g.guild_id} onClick={() => setGuildId(g.guild_id)} style={{
+                    padding: '5px 10px', borderRadius: 5, border: '1px solid',
+                    borderColor: guildId === g.guild_id ? 'var(--primary)55' : 'var(--border)',
+                    background: guildId === g.guild_id ? 'var(--primary-lo)' : 'transparent',
+                    color: guildId === g.guild_id ? 'var(--primary)' : 'var(--text-3)',
+                    fontSize: 11, fontWeight: guildId === g.guild_id ? 600 : 400,
+                    textAlign: 'left', cursor: 'pointer', transition: 'all 0.15s',
+                  }}>
+                    {guildLabel(g, i)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Nav */}
@@ -1184,5 +1247,6 @@ export default function App() {
         </div>
       </main>
     </div>
+    </GuildContext.Provider>
   )
 }
