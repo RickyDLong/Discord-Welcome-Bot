@@ -3,7 +3,6 @@ import { config } from '../config';
 import { GUILD_CONFIGS } from '../config/guildConfigs';
 import { supabase } from '../db/supabase';
 import { TIERS, getTierForPoints } from '../points/tiers';
-import { activeSessions } from '../events_v2/voiceStateUpdate';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -187,9 +186,13 @@ async function updateGuildDashboard(
     catch { return `<@${uid}>`; }
   };
 
-  // Count only voice sessions for this specific guild
-  const guildVoiceSessionCount = [...activeSessions.keys()]
-    .filter(k => k.startsWith(`${guildId}:`)).length;
+  // Count members currently in voice using guild cache (accurate even if they joined before bot started)
+  const guildVoiceSessionCount = guild.channels.cache
+    .filter(ch =>
+      (ch.type === ChannelType.GuildVoice || ch.type === ChannelType.GuildStageVoice) &&
+      'members' in ch,
+    )
+    .reduce((sum, ch) => sum + (ch as any).members.size, 0);
 
   const [voiceLines, msgLines, streakLines, xpLines, rxnLines, tripleThreatNames, achievementLines] =
     await Promise.all([
