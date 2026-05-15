@@ -1124,10 +1124,11 @@ export default function App() {
   }[section]
 
   const GUILD_NAMES: Record<string, string> = {
+    '248171801887244289': 'Archix',
     '692162728424505376': "Abain's Discord",
   }
-  const guildLabel = (g: GuildEntry, i: number) => {
-    const name = GUILD_NAMES[g.guild_id] ?? (i === 0 ? 'Archix' : `Server ${i + 1}`)
+  const guildLabel = (g: GuildEntry) => {
+    const name = GUILD_NAMES[g.guild_id] ?? `Guild ${g.guild_id.slice(-4)}`
     return `${name} (${(g.member_count ?? 0).toLocaleString()})`
   }
 
@@ -1190,7 +1191,7 @@ export default function App() {
                     fontSize: 11, fontWeight: guildId === g.guild_id ? 600 : 400,
                     textAlign: 'left', cursor: 'pointer', transition: 'all 0.15s',
                   }}>
-                    {guildLabel(g, i)}
+                    {guildLabel(g)}
                   </button>
                 ))}
               </div>
