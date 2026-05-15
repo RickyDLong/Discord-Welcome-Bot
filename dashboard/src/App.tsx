@@ -4,7 +4,7 @@ import {
 } from 'recharts'
 
 // ─── CONFIG ─────────────────────────────────────────────────────────────────
-const API = 'https://pihole.tailb24ccl.ts.net''
+const API = 'https://simple-motive-rockstar.ngrok-free.dev'
 const REFRESH_MS = 30_000
 
 // ─── TYPES ──────────────────────────────────────────────────────────────────
